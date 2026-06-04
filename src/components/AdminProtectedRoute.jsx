@@ -1,0 +1,23 @@
+import { Navigate, Outlet } from "react-router-dom";
+
+export default function AdminProtectedRoute() {
+  const session = localStorage.getItem("saka_admin_session");
+
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
+  try {
+    const parsedSession = JSON.parse(session);
+
+    if (!parsedSession.isLoggedIn || parsedSession.role !== "Admin") {
+      localStorage.removeItem("saka_admin_session");
+      return <Navigate to="/login" replace />;
+    }
+
+    return <Outlet />;
+  } catch (error) {
+    localStorage.removeItem("saka_admin_session");
+    return <Navigate to="/login" replace />;
+  }
+}
