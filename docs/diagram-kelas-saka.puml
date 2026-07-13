@@ -1,0 +1,177 @@
+@startuml Diagram_Kelas_Sistem_SAKA
+allowmixing
+
+' ============================================================
+' Class Diagram - Sistem Informasi SAKA (Saling Kabar)
+' Monitoring Ketersediaan Produk Outlet Kopi Berjalan
+' ============================================================
+
+title Class Diagram Sistem Informasi SAKA\n(Saling Kabar - Monitoring Ketersediaan Produk)
+
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam defaultFontName Arial
+skinparam classAttributeIconSize 0
+
+skinparam class {
+  BackgroundColor #F7F0E6
+  BorderColor #06251C
+  FontColor #06251C
+  HeaderBackgroundColor #103C2E
+  HeaderFontColor #FFFFFF
+  ArrowColor #06251C
+}
+
+skinparam note {
+  BackgroundColor #DFF4EA
+  BorderColor #103C2E
+  FontColor #06251C
+}
+
+skinparam actor {
+  BackgroundColor #DFF4EA
+  BorderColor #103C2E
+  FontColor #06251C
+}
+
+' ─────────────────────────────────────────
+' CLASS UTAMA
+' ─────────────────────────────────────────
+
+class Admin {
+  - id_admin : String
+  - nama : String
+  - email : String
+  - password : String
+  --
+  + login() : Boolean
+  + kelolaMenu() : void
+  + kelolaOutlet() : void
+  + kelolaLiteran() : void
+  + lihatMonitoring() : void
+  + lihatFeedback() : void
+}
+
+class Outlet {
+  - id_outlet : String
+  - nama_cabang : String
+  - jenis_kendaraan : String
+  - alamat : String
+  - link_maps : String
+  - jam_buka : Time
+  - jam_tutup : Time
+  - status_operasional : String
+  --
+  + tampilkanInformasi() : void
+}
+
+class Rider {
+  - id_rider : String
+  - nama : String
+  - username : String
+  - password : String
+  - nomor_hp : String
+  - status_akun : String
+  - status_operasional : String
+  --
+  + login() : Boolean
+  + ubahStatusProduk() : void
+  + lihatProduk() : void
+}
+
+class Menu {
+  - id_menu : String
+  - nama_menu : String
+  - kategori : String
+  - harga_cup : Decimal
+  - harga_500ml : Decimal
+  - harga_1liter : Decimal
+  - deskripsi : String
+  - status : String
+  --
+  + tampilkanMenu() : void
+}
+
+class KetersediaanProduk {
+  - id_ketersediaan : String
+  - status_ketersediaan : String
+  - catatan : String
+  - tanggal_update : DateTime
+  --
+  + ubahStatus() : void
+  + lihatStatus() : String
+}
+
+class Feedback {
+  - id_feedback : String
+  - nama_pelanggan : String
+  - nomor_hp : String
+  - kategori : String
+  - rating : Integer
+  - pesan : String
+  - status : String
+  - tanggal_feedback : DateTime
+  --
+  + kirimFeedback() : void
+  + lihatFeedback() : void
+}
+
+' ─────────────────────────────────────────
+' AKTOR EKSTERNAL
+' ─────────────────────────────────────────
+
+actor Pelanggan
+
+' ─────────────────────────────────────────
+' RELASI ANTAR CLASS
+' ─────────────────────────────────────────
+
+Admin "1" --> "0..*" Outlet : mengelola
+
+Outlet "1" --> "0..*" Rider : memiliki
+
+Outlet "1" --> "0..*" KetersediaanProduk : memiliki
+
+Menu "1" --> "0..*" KetersediaanProduk : dimonitor
+
+Rider "1" --> "0..*" KetersediaanProduk : memperbarui
+
+Outlet "1" --> "0..*" Feedback : menerima
+
+Pelanggan ..> Outlet : melihat
+Pelanggan ..> Menu : melihat
+Pelanggan ..> KetersediaanProduk : melihat
+Pelanggan ..> Feedback : mengirim
+
+' ─────────────────────────────────────────
+' CATATAN ATURAN BISNIS
+' ─────────────────────────────────────────
+
+note top of KetersediaanProduk
+  Sistem Ketersediaan (Bukan Stok Kuantitas)
+  status_ketersediaan: Tersedia / Tidak Tersedia
+  Tidak ada: stok_awal, stok_sisa, kapasitas_maksimal
+end note
+
+note bottom of Menu
+  Aturan Produk Literan:
+  - Hanya tersedia di Outlet Utama
+  - Hanya dikelola oleh Admin
+  - Rider tidak dapat mengubah Literan
+end note
+
+note bottom of Rider
+  Hak Akses Rider:
+  - Hanya ubah status Tersedia / Tidak Tersedia
+  - Tidak mengelola menu, outlet, literan
+end note
+
+note bottom of Admin
+  Hak Akses Admin:
+  - Kelola outlet, menu, literan
+  - Pantau ketersediaan via dashboard
+  - Kelola feedback pelanggan
+end note
+
+@enduml

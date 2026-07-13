@@ -4,70 +4,91 @@ import {
   MdFeedback,
   MdSearch,
   MdStar,
-  MdVisibility,
-  MdVisibilityOff,
+  MdAccessTime,
+  MdCheckCircle,
+  MdCancel,
 } from "react-icons/md";
-
-const defaultFeedbacks = [
-  {
-    id: 1,
-    customerName: "Aditra Rahman",
-    type: "Review",
-    rating: 5,
-    message: "Kopinya enak, pelayanan cepat, dan rider ramah.",
-    status: "Ditampilkan",
-    date: "2026-05-29",
-  },
-  {
-    id: 2,
-    customerName: "Isfi Ansyah",
-    type: "Keluhan",
-    rating: 3,
-    message: "Pesanan datang agak lama di cabang Greenwich Station.",
-    status: "Pending",
-    date: "2026-05-29",
-  },
-  {
-    id: 3,
-    customerName: "Raka Dimas",
-    type: "Masukan",
-    rating: 4,
-    message: "Menu creamy butterscotch enak, mungkin bisa tambah ukuran cup besar.",
-    status: "Ditampilkan",
-    date: "2026-05-28",
-  },
-  {
-    id: 4,
-    customerName: "Nabila Putri",
-    type: "Keluhan",
-    rating: 2,
-    message: "Minuman kurang dingin saat diterima.",
-    status: "Disembunyikan",
-    date: "2026-05-28",
-  },
-];
-
+import api from "../../services/api";
+import { usePagination } from "../../hooks/usePagination";
+import Pagination from "../../components/Pagination";
+import StatCard from "../../components/StatCard";
+import ResponsiveGrid from "../../components/ResponsiveGrid";
 export default function Feedback() {
-  const [feedbacks, setFeedbacks] = useState(() => {
-    const saved = localStorage.getItem("saka_feedbacks");
-    return saved ? JSON.parse(saved) : defaultFeedbacks;
-  });
-
+  const [feedback, setfeedback] = useState([]);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("Semua");
+  const [loading, setLoading] = useState(false);
+
+  const getErrorMessage = (error, fallback) => {
+    const message = error?.response?.data?.message;
+    const errors = error?.response?.data?.errors;
+
+    if (message) return message;
+
+    if (errors) {
+      const firstError = Object.values(errors)[0];
+
+      if (Array.isArray(firstError)) {
+        return firstError[0];
+      }
+    }
+
+    return fallback;
+  };
+
+  const toArray = (response) => {
+    if (Array.isArray(response?.data)) return response.data;
+    if (Array.isArray(response?.data?.data)) return response.data.data;
+    return [];
+  };
+
+  const formatDate = (value) => {
+    if (!value) return "-";
+    return String(value).slice(0, 10);
+  };
+
+  const normalizefeedbackFromApi = (item) => ({
+    id: item.id,
+    customerName:
+      item.customer_name ||
+      item.customerName ||
+      item.name ||
+      item.nama ||
+      "Pelanggan",
+    type: item.type || item.category || item.jenis || "Review",
+    rating: Number(item.rating || 0),
+    message: item.message || item.content || item.isi || item.feedback || "",
+    status: item.status || "Pending",
+    date: formatDate(item.feedback_date || item.created_at),
+  });
+
+  const fetchfeedback = async () => {
+  try {
+    setLoading(true);
+
+    const response = await api.get("/admin/feedback");
+    const data = response.data.data ?? response.data;
+    setfeedback(data.map(normalizefeedbackFromApi));
+
+  } catch (error) {
+    alert(getErrorMessage(error, "Gagal mengambil data feedback."));
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
-    localStorage.setItem("saka_feedbacks", JSON.stringify(feedbacks));
-  }, [feedbacks]);
+    fetchfeedback();
+  }, []);
 
-  const filteredFeedbacks = feedbacks.filter((item) => {
+  const filteredfeedback = feedback.filter((item) => {
     const keyword = search.toLowerCase();
 
     const matchSearch =
-      item.customerName.toLowerCase().includes(keyword) ||
-      item.type.toLowerCase().includes(keyword) ||
-      item.message.toLowerCase().includes(keyword) ||
-      item.status.toLowerCase().includes(keyword);
+      (item.customerName || "").toLowerCase().includes(keyword) ||
+      (item.type || "").toLowerCase().includes(keyword) ||
+      (item.message || "").toLowerCase().includes(keyword) ||
+      (item.status || "").toLowerCase().includes(keyword);
 
     const matchStatus =
       filterStatus === "Semua" ? true : item.status === filterStatus;
@@ -75,35 +96,61 @@ export default function Feedback() {
     return matchSearch && matchStatus;
   });
 
-  const totalFeedbacks = feedbacks.length;
-  const pendingFeedbacks = feedbacks.filter(
+  const {
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    currentData: paginatedFeedback,
+  } = usePagination(filteredfeedback, 8);
+
+  const totalfeedback = feedback.length;
+  const pendingfeedback = feedback.filter(
     (item) => item.status === "Pending"
   ).length;
-  const shownFeedbacks = feedbacks.filter(
+  const shownfeedback = feedback.filter(
     (item) => item.status === "Ditampilkan"
   ).length;
-  const hiddenFeedbacks = feedbacks.filter(
+  const hiddenfeedback = feedback.filter(
     (item) => item.status === "Disembunyikan"
   ).length;
 
-  const handleChangeStatus = (id, status) => {
-    setFeedbacks((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-            ...item,
-            status,
-          }
-          : item
-      )
-    );
+  const createPayload = (item, status) => ({
+  customer_name: item.customerName,
+  type: item.type,
+  rating: item.rating,
+  message: item.message,
+  status: status,
+});
+
+  const handleChangeStatus = async (id, status) => {
+    const selectedfeedback = feedback.find((item) => item.id === id);
+
+    if (!selectedfeedback) return;
+
+    try {
+    const payload = createPayload(selectedfeedback,status);
+
+    await api.put(`/admin/feedback/${id}`,payload);
+
+    fetchfeedback();
+
+} catch(error){
+      alert(getErrorMessage(error, "Gagal mengubah status feedback."));
+    }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     const confirmDelete = confirm("Yakin mau hapus review/keluhan ini?");
 
-    if (confirmDelete) {
-      setFeedbacks((prev) => prev.filter((item) => item.id !== id));
+    if (!confirmDelete) return;
+
+    try {
+      await api.delete(`/admin/feedback/${id}`);
+      fetchfeedback();
+
+      setfeedback((prev) => prev.filter((item) => item.id !== id));
+    } catch (error) {
+      alert(getErrorMessage(error, "Gagal menghapus feedback."));
     }
   };
 
@@ -133,40 +180,46 @@ export default function Feedback() {
         <div className="flex items-center gap-3 rounded-full bg-[#103c2e] px-5 py-3">
           <MdFeedback className="text-xl text-emerald-300" />
           <span className="text-sm font-bold text-slate-200">
-            Total Feedback: {totalFeedbacks}
+            Total feedback: {totalfeedback}
           </span>
         </div>
       </div>
 
       {/* Cards */}
-      <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-3xl bg: bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Total
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{totalFeedbacks}</h2>
-        </div>
+      <div className="mb-6">
+        <ResponsiveGrid>
+          <StatCard
+            icon={<MdFeedback />}
+            iconClass="bg-slate-100 text-slate-900"
+            label="Total"
+            value={totalfeedback}
+            className="bg-white text-[#06251c]"
+          />
 
-        <div className="rounded-3xl bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Pending
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{pendingFeedbacks}</h2>
-        </div>
+          <StatCard
+            icon={<MdAccessTime />}
+            iconClass="bg-yellow-100 text-yellow-700"
+            label="Pending"
+            value={pendingfeedback}
+            className="bg-white text-[#06251c]"
+          />
 
-        <div className="rounded-3xl bg: bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Ditampilkan
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{shownFeedbacks}</h2>
-        </div>
+          <StatCard
+            icon={<MdCheckCircle />}
+            iconClass="bg-emerald-100 text-emerald-700"
+            label="Ditampilkan"
+            value={shownfeedback}
+            className="bg-white text-[#06251c]"
+          />
 
-        <div className="rounded-3xl bg: bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-400">
-            Disembunyikan
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{hiddenFeedbacks}</h2>
-        </div>
+          <StatCard
+            icon={<MdCancel />}
+            iconClass="bg-red-100 text-red-600"
+            label="Disembunyikan"
+            value={hiddenfeedback}
+            className="bg-white text-[#06251c]"
+          />
+        </ResponsiveGrid>
       </div>
 
       {/* Content */}
@@ -213,15 +266,19 @@ export default function Feedback() {
         </div>
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {filteredFeedbacks.length === 0 ? (
+          {loading ? (
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center text-sm text-slate-400 xl:col-span-2">
+              Mengambil data feedback dari backend...
+            </div>
+          ) : filteredfeedback.length === 0 ? (
             <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center text-sm text-slate-400 xl:col-span-2">
               Data feedback tidak ditemukan.
             </div>
           ) : (
-            filteredFeedbacks.map((item) => (
+            paginatedFeedback.map((item) => (
               <div
                 key={item.id}
-                className="rounded-3xl border border-white/10 bg-[#06251c] p-6"
+                className="saka-card rounded-3xl border border-white/10 bg-[#06251c] p-6 shadow-sm"
               >
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
@@ -263,17 +320,17 @@ export default function Feedback() {
                   </div>
                 </div>
 
-                <p className="min-h-[70px] text-sm leading-6 text-slate-300">
+                <p className="text-sm leading-7 text-slate-300">
                   {item.message}
                 </p>
 
-                <div className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-5 md:flex-row md:items-center md:justify-between">
+                <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-5">
                   <select
                     value={item.status}
                     onChange={(e) =>
                       handleChangeStatus(item.id, e.target.value)
                     }
-                    className={`rounded-full px-4 py-2 text-xs font-black outline-none ${statusClass(
+                    className={`cursor-pointer rounded-full px-4 py-2 text-xs font-black outline-none transition-colors ${statusClass(
                       item.status
                     )}`}
                   >
@@ -288,42 +345,26 @@ export default function Feedback() {
                     </option>
                   </select>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleChangeStatus(item.id, "Ditampilkan")
-                      }
-                      className="flex items-center gap-2 rounded-full bg-green-500/20 px-4 py-2 text-xs font-black text-green-300 hover:bg-green-500 hover:text-white"
-                    >
-                      <MdVisibility />
-                      Tampilkan
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleChangeStatus(item.id, "Disembunyikan")
-                      }
-                      className="flex items-center gap-2 rounded-full bg-yellow-500/20 px-4 py-2 text-xs font-black text-yellow-300 hover:bg-yellow-500 hover:text-white"
-                    >
-                      <MdVisibilityOff />
-                      Sembunyikan
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(item.id)}
-                      className="rounded-full bg-red-500/20 p-2 text-red-300 hover:bg-red-500 hover:text-white"
-                    >
-                      <MdDelete />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item.id)}
+                    className="rounded-full bg-red-500/20 p-2.5 text-red-300 transition hover:bg-red-500 hover:text-white"
+                  >
+                    <MdDelete />
+                  </button>
                 </div>
               </div>
             ))
           )}
         </div>
+        
+        {filteredfeedback.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </div>
     </div>
   );

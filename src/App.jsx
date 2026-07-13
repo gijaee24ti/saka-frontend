@@ -11,16 +11,20 @@ import AuthLayout from "./layouts/AuthLayout";
 
 import NotFound from "./pages/NotFound";
 
-const Login = React.lazy(() => import("./pages/auth/Login"));
-const Forgot = React.lazy(() => import("./pages/auth/Forgot"));
+const Login = React.lazy(() => import("./pages/Auth/Login"));
+const Forgot = React.lazy(() => import("./pages/Auth/Forgot"));
+
 const AdminDashboard = React.lazy(() => import("./pages/AdminDashboard"));
 const Riders = React.lazy(() => import("./pages/admin/Riders"));
 const Products = React.lazy(() => import("./pages/admin/Products"));
 const Locations = React.lazy(() => import("./pages/admin/Locations"));
 const Feedback = React.lazy(() => import("./pages/admin/Feedback"));
 const MonitoringStok = React.lazy(() => import("./pages/admin/MonitoringStok"));
+const ManajemenLiteran = React.lazy(() => import("./pages/admin/ManajemenLiteran"));
 const Settings = React.lazy(() => import("./pages/admin/Settings"));
+
 const RiderDashboard = React.lazy(() => import("./pages/rider/RiderDashboard"));
+const CustomerPage = React.lazy(() => import("./pages/customer/CustomerPage"));
 
 function App() {
   return (
@@ -41,15 +45,16 @@ function App() {
             <Route path="/lokasi" element={<Locations />} />
             <Route path="/keluhan" element={<Feedback />} />
             <Route path="/monitoring-stok" element={<MonitoringStok />} />
+            <Route path="/manajemen-literan" element={<ManajemenLiteran />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Route>
 
-        <Route
-          path="/rider-login"
-          element={<Navigate to="/rider-dashboard" replace />}
-        />
-        <Route path="/rider-dashboard" element={<RiderDashboard />} />
+        <Route path="/rider-login" element={<Navigate to="/rider" replace />} />
+        <Route path="/rider-dashboard" element={<Navigate to="/rider" replace />} />
+        <Route path="/rider" element={<RiderDashboard />} />
+
+        <Route path="/pelanggan" element={<CustomerPage />} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>

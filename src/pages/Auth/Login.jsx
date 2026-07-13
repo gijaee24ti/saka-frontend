@@ -8,12 +8,7 @@ import {
   MdAdminPanelSettings,
 } from "react-icons/md";
 import { ImSpinner2 } from "react-icons/im";
-
-const adminAccount = {
-  username: "gizza",
-  password: "12345678",
-  name: "Admin Saka",
-};
+import api from "../../services/api";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -37,6 +32,23 @@ export default function Login() {
     }, 3500);
   };
 
+  const getErrorMessage = (error, fallback) => {
+    const message = error?.response?.data?.message;
+    const errors = error?.response?.data?.errors;
+
+    if (message) return message;
+
+    if (errors) {
+      const firstError = Object.values(errors)[0];
+
+      if (Array.isArray(firstError)) {
+        return firstError[0];
+      }
+    }
+
+    return fallback;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -46,41 +58,56 @@ export default function Login() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!form.username || !form.password) {
-      showNotice("error", "Username dan password wajib diisi.");
+      showNotice("error", "Email/username dan password wajib diisi.");
       return;
     }
 
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    setTimeout(() => {
-      const isValid =
-        form.username.trim().toLowerCase() === adminAccount.username &&
-        form.password === adminAccount.password;
+      const response = await api.post("/admin/login", {
+        email: form.username.trim(),
+        username: form.username.trim(),
+        password: form.password,
+      });
 
-      if (!isValid) {
-        setLoading(false);
-        showNotice("error", "Username atau password admin salah.");
-        return;
-      }
+      const adminData =
+        response.data?.admin ||
+        response.data?.user ||
+        response.data?.data ||
+        {};
 
       localStorage.setItem(
         "saka_admin_session",
         JSON.stringify({
-          name: adminAccount.name,
-          username: adminAccount.username,
+          id: adminData.id || null,
+          name: adminData.name || "Admin Saka",
+          username: adminData.username || form.username.trim(),
+          email: adminData.email || form.username.trim(),
           role: "Admin",
+          token: response.data?.token || null,
           isLoggedIn: true,
           loginAt: new Date().toISOString(),
         })
       );
 
+      showNotice("success", "Login admin berhasil.");
+
+      setTimeout(() => {
+        navigate("/admin");
+      }, 500);
+    } catch (error) {
+      showNotice(
+        "error",
+        getErrorMessage(error, "Email/username atau password admin salah.")
+      );
+    } finally {
       setLoading(false);
-      navigate("/admin");
-    }, 500);
+    }
   };
 
   return (
@@ -115,11 +142,11 @@ export default function Login() {
             </p>
 
             <div className="mt-7 rounded-3xl bg-white/5 p-5">
-              <p className="text-sm font-black text-white">Akun prototype</p>
+              <p className="text-sm font-black text-white">Akun backend</p>
               <p className="mt-2 text-xs leading-6 text-slate-300">
-                Username: <b>gizza</b>
+                Email: <b>admin@saka.com</b>
                 <br />
-                Password: <b>12345678</b>
+                Password: <b>admin123</b>
               </p>
             </div>
           </div>
@@ -142,7 +169,7 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
               <div>
                 <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                  Username
+                  Email / Username
                 </label>
 
                 <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
@@ -152,7 +179,7 @@ export default function Login() {
                     name="username"
                     value={form.username}
                     onChange={handleChange}
-                    placeholder="Contoh: gizza"
+                    placeholder="Contoh: admin@saka.com"
                     className="w-full bg-transparent text-sm font-bold outline-none"
                   />
                 </div>
@@ -218,9 +245,8 @@ export default function Login() {
 
             <div className="mt-6 rounded-3xl bg-[#06251c]/10 p-5">
               <p className="text-xs font-bold leading-6 text-slate-600">
-                Untuk prototype, login admin masih menggunakan akun lokal.
-                Nanti saat memakai backend, bagian ini bisa disambungkan ke
-                database dan autentikasi asli.
+                Login admin sekarang sudah tersambung ke backend Laravel.
+                Gunakan akun admin yang ada di database.
               </p>
             </div>
           </div>

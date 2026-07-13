@@ -5,8 +5,15 @@ import {
   MdEdit,
   MdLocalShipping,
   MdSearch,
+  MdCheckCircle,
+  MdLocalCafe,
+  MdBedtime,
 } from "react-icons/md";
-
+import api from "../../services/api";
+import { usePagination } from "../../hooks/usePagination";
+import Pagination from "../../components/Pagination";
+import StatCard from "../../components/StatCard";
+import ResponsiveGrid from "../../components/ResponsiveGrid";
 const createUsername = (name = "") => {
   return name
     .toLowerCase()
@@ -14,48 +21,6 @@ const createUsername = (name = "") => {
     .replace(/\s+/g, "")
     .replace(/[^a-z0-9]/g, "");
 };
-
-const defaultRiders = [
-  {
-    id: 1,
-    name: "Aris Setiawan",
-    phone: "081234567891",
-    username: "aris",
-    password: "aris123",
-    accountStatus: "Aktif",
-    stand: "Cabang Arifin Ahmad",
-    operationalStatus: "Berjualan",
-  },
-  {
-    id: 2,
-    name: "Budi Kusuma",
-    phone: "081234567892",
-    username: "budi",
-    password: "budi123",
-    accountStatus: "Aktif",
-    stand: "Cabang Rumbai",
-    operationalStatus: "Istirahat",
-  },
-];
-
-const defaultLocations = [
-  { id: 1, branch: "Cabang Cut Nyak Dien" },
-  { id: 2, branch: "Cabang Patimura" },
-  { id: 3, branch: "Cabang Rajawali" },
-  { id: 4, branch: "Cabang Riau" },
-  { id: 5, branch: "Cabang Kharudin Nasution / Simpang" },
-  { id: 6, branch: "Cabang Arifin Ahmad" },
-  { id: 7, branch: "Cabang Rumbai" },
-  { id: 8, branch: "Cabang Stadion / Nagasakti" },
-  { id: 9, branch: "Cabang Tuanku Tambusai / Nangka" },
-  { id: 10, branch: "Cabang Nangka Ujung" },
-  { id: 11, branch: "Cabang Hang Tuah Ujung" },
-  { id: 12, branch: "Cabang Parit Indah" },
-  { id: 13, branch: "Cabang HR. Soebrantas" },
-  { id: 14, branch: "Cabang Soekarno Hatta" },
-  { id: 15, branch: "Cabang Hangtuah" },
-  { id: 16, branch: "Bajaj Dipo Malam" },
-];
 
 const emptyForm = {
   name: "",
@@ -67,69 +32,94 @@ const emptyForm = {
 };
 
 export default function Riders() {
-  const [riders, setRiders] = useState(() => {
-    const saved = localStorage.getItem("saka_riders");
-
-    if (!saved) return defaultRiders;
-
-    try {
-      const parsed = JSON.parse(saved);
-
-      return parsed.map((rider) => {
-        const riderName = rider.name || "";
-        const oldStatus = rider.status || "";
-
-        return {
-          id: rider.id || Date.now(),
-          name: riderName,
-          phone: rider.phone || "",
-          username: rider.username || createUsername(riderName),
-          password: rider.password || "",
-          accountStatus:
-            rider.accountStatus ||
-            (oldStatus === "Inactive" ? "Nonaktif" : "Aktif"),
-          stand: rider.stand || rider.location || "",
-          operationalStatus:
-            rider.operationalStatus ||
-            (oldStatus === "Break"
-              ? "Istirahat"
-              : oldStatus === "Active"
-              ? "Berjualan"
-              : "Tidak Beroperasi"),
-
-          location: rider.location || rider.stand || "",
-          status: rider.status || "Inactive",
-        };
-      });
-    } catch (error) {
-      localStorage.removeItem("saka_riders");
-      return defaultRiders;
-    }
-  });
-
-  const [locations] = useState(() => {
-    const saved = localStorage.getItem("saka_locations");
-
-    if (!saved) return defaultLocations;
-
-    try {
-      return JSON.parse(saved);
-    } catch (error) {
-      return defaultLocations;
-    }
-  });
-
+  const [riders, setRiders] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const getErrorMessage = (error, fallback) => {
+    const message = error?.response?.data?.message;
+    const errors = error?.response?.data?.errors;
+
+    if (message) return message;
+
+    if (errors) {
+      const firstError = Object.values(errors)[0];
+
+      if (Array.isArray(firstError)) {
+        return firstError[0];
+      }
+    }
+
+    return fallback;
+  };
+
+  const normalizeRiderFromApi = (rider) => ({
+    id: rider.id,
+    name: rider.name || "",
+    phone: rider.phone || "",
+    username: rider.username || createUsername(rider.name),
+    password: "",
+    accountStatus: rider.account_status || "Aktif",
+    stand: rider.outlet?.branch || "",
+    outletId: rider.outlet_id || rider.outlet?.id || "",
+    operationalStatus: rider.operational_status || "Tidak Beroperasi",
+
+    location: rider.outlet?.branch || "",
+    status:
+      rider.operational_status === "Berjualan"
+        ? "Active"
+        : rider.operational_status === "Istirahat"
+          ? "Break"
+          : "Inactive",
+  });
+
+  const normalizeOutletFromApi = (outlet) => ({
+    id: outlet.id,
+    branch: outlet.branch || "",
+  });
+
+  const fetchRiders = async () => {
+    try {
+      setLoading(true);
+
+      const response = await api.get("/admin/riders");
+
+      const data = Array.isArray(response.data)
+        ? response.data
+        : response.data.data || [];
+
+      setRiders(data.map(normalizeRiderFromApi));
+    } catch (error) {
+      alert(getErrorMessage(error, "Gagal mengambil data rider dari backend."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchLocations = async () => {
+    try {
+      const response = await api.get("/public/outlets");
+
+      const data = Array.isArray(response.data)
+        ? response.data
+        : response.data.data || [];
+
+      setLocations(data.map(normalizeOutletFromApi));
+    } catch (error) {
+      alert(getErrorMessage(error, "Gagal mengambil data outlet."));
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem("saka_riders", JSON.stringify(riders));
-  }, [riders]);
+    fetchRiders();
+    fetchLocations();
+  }, []);
 
   const locationOptions = useMemo(() => {
-    if (!locations || locations.length === 0) return defaultLocations;
-    return locations;
+    return locations || [];
   }, [locations]);
 
   const getInitial = (name = "") => {
@@ -154,6 +144,13 @@ export default function Riders() {
       (rider.operationalStatus || "").toLowerCase().includes(keyword)
     );
   });
+
+  const {
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    currentData: paginatedRiders,
+  } = usePagination(filteredRiders, 5);
 
   const totalRiders = riders.length;
   const activeAccounts = riders.filter(
@@ -199,54 +196,60 @@ export default function Riders() {
     return true;
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    if (!validateForm()) return;
-
+  const createPayload = () => {
     const oldData = riders.find((rider) => rider.id === editId);
 
     const finalUsername =
       form.username || oldData?.username || createUsername(form.name);
 
-    const riderData = {
+    const selectedOutlet = locationOptions.find(
+      (location) => location.branch === form.stand
+    );
+
+    const payload = {
+      outlet_id: selectedOutlet?.id || oldData?.outletId || null,
       name: form.name,
       phone: form.phone,
       username: finalUsername,
-      password: form.password || oldData?.password || "",
-      accountStatus: form.accountStatus || oldData?.accountStatus || "Aktif",
-      stand: form.stand || oldData?.stand || oldData?.location || "",
-
-      operationalStatus: editId
+      account_status: form.accountStatus || oldData?.accountStatus || "Aktif",
+      operational_status: editId
         ? oldData?.operationalStatus || "Tidak Beroperasi"
         : "Tidak Beroperasi",
-
-      location: form.stand || oldData?.stand || oldData?.location || "",
-      status: editId ? oldData?.status || "Inactive" : "Inactive",
+      note: null,
     };
 
     if (editId) {
-      setRiders((prev) =>
-        prev.map((rider) =>
-          rider.id === editId
-            ? {
-                ...rider,
-                ...riderData,
-              }
-            : rider
-        )
-      );
+      if (form.password) {
+        payload.password = form.password;
+      }
     } else {
-      setRiders((prev) => [
-        {
-          id: Date.now(),
-          ...riderData,
-        },
-        ...prev,
-      ]);
+      payload.password = form.password || `${finalUsername}123`;
     }
 
-    resetForm();
+    return payload;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!validateForm()) return;
+
+    try {
+      const payload = createPayload();
+
+      if (editId) {
+        await api.put(`/admin/riders/${editId}`, payload);
+        alert("Data rider berhasil diperbarui.");
+      } else {
+        await api.post("/admin/riders", payload);
+        alert("Rider baru berhasil ditambahkan.");
+      }
+
+      resetForm();
+      fetchRiders();
+    } catch (error) {
+      alert(getErrorMessage(error, "Gagal menyimpan data rider."));
+    }
   };
 
   const handleEdit = (rider) => {
@@ -256,17 +259,23 @@ export default function Riders() {
       name: rider.name || "",
       phone: rider.phone || "",
       username: rider.username || createUsername(rider.name),
-      password: rider.password || "",
+      password: "",
       accountStatus: rider.accountStatus || "Aktif",
       stand: rider.stand || rider.location || "",
     });
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     const confirmDelete = confirm("Yakin mau hapus data rider ini?");
 
-    if (confirmDelete) {
-      setRiders((prev) => prev.filter((rider) => rider.id !== id));
+    if (!confirmDelete) return;
+
+    try {
+      await api.delete(`/admin/riders/${id}`);
+      alert("Data rider berhasil dihapus.");
+      fetchRiders();
+    } catch (error) {
+      alert(getErrorMessage(error, "Gagal menghapus data rider."));
     }
   };
 
@@ -308,37 +317,39 @@ export default function Riders() {
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-3xl bg: bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Total Rider
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{totalRiders}</h2>
-        </div>
+      <div className="mb-6">
+        <ResponsiveGrid>
+          <StatCard
+            icon={<div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg bg-[#e7ddd0] text-[#06251c]"><MdLocalShipping /></div>}
+            label="Total Rider"
+            value={totalRiders}
+            className="bg-white text-[#06251c]"
+          />
 
-        <div class="rounded-3xl bg: bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Akun Aktif
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{activeAccounts}</h2>
-        </div>
+          <StatCard
+            icon={<div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg bg-[#cce6dd] text-[#607f75]"><MdCheckCircle /></div>}
+            label="Akun Aktif"
+            value={activeAccounts}
+            className="bg-white text-[#06251c]"
+          />
 
-        <div class="rounded-3xl bg: bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Berjualan
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{sellingRiders}</h2>
-        </div>
+          <StatCard
+            icon={<div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg bg-emerald-100 text-emerald-600"><MdLocalCafe /></div>}
+            label="Berjualan"
+            value={sellingRiders}
+            className="bg-white text-[#06251c]"
+          />
 
-        <div class="rounded-3xl bg: bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Istirahat
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{breakRiders}</h2>
-        </div>
+          <StatCard
+            icon={<div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg bg-yellow-100 text-yellow-600"><MdBedtime /></div>}
+            label="Istirahat"
+            value={breakRiders}
+            className="bg-white text-[#06251c]"
+          />
+        </ResponsiveGrid>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
         <div className="saka-panel bg-[#f7f0e6] p-7 text-[#06251c]">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#06251c] text-white">
@@ -407,7 +418,11 @@ export default function Riders() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                placeholder="Opsional: contoh aris123"
+                placeholder={
+                  editId
+                    ? "Kosongkan jika tidak ingin mengganti password"
+                    : "Opsional: contoh aris123"
+                }
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#06251c]"
               />
             </div>
@@ -498,111 +513,209 @@ export default function Riders() {
           </div>
 
           <div className="overflow-x-auto">
-            <div className="min-w-[1050px]">
-              <div className="mb-3 grid grid-cols-[1.5fr_1.15fr_1fr_1.55fr_1fr_1.25fr_0.8fr] gap-5 px-5 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                <div>Rider</div>
-                <div>No HP</div>
-                <div>Username</div>
-                <div>Stand Tugas</div>
-                <div>Akun</div>
-                <div>Operasional</div>
-                <div className="text-right">Aksi</div>
+            {loading ? (
+              <div className="rounded-3xl bg-white/5 p-8 text-center text-sm text-slate-400">
+                Mengambil data rider dari backend...
               </div>
-
-              <div className="space-y-3">
-                {filteredRiders.length === 0 ? (
-                  <div className="rounded-3xl bg-white/5 p-8 text-center text-sm text-slate-400">
-                    Data rider tidak ditemukan.
+            ) : filteredRiders.length === 0 ? (
+              <div className="rounded-3xl bg-white/5 p-8 text-center text-sm text-slate-400">
+                Data rider tidak ditemukan.
+              </div>
+            ) : (
+              <>
+                <div className="hidden lg:block min-w-[1050px]">
+                  <div className="mb-3 grid grid-cols-[1.5fr_1.15fr_1fr_1.55fr_1fr_1.25fr_0.8fr] gap-5 px-5 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                    <div>Rider</div>
+                    <div>No HP</div>
+                    <div>Username</div>
+                    <div>Stand Tugas</div>
+                    <div>Akun</div>
+                    <div>Operasional</div>
+                    <div className="text-right">Aksi</div>
                   </div>
-                ) : (
-                  filteredRiders.map((rider) => (
-                    <div
-                      key={rider.id}
-                      className="grid grid-cols-[1.5fr_1.15fr_1fr_1.55fr_1fr_1.25fr_0.8fr] items-center gap-5 rounded-3xl bg-white/5 px-5 py-5 transition hover:bg-white/10"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#e7f2ea] text-sm font-black text-[#06251c]">
-                          {getInitial(rider.name)}
+
+                  <div className="space-y-3">
+                    {paginatedRiders.map((rider) => (
+                      <div
+                        key={rider.id}
+                        className="grid grid-cols-[1.5fr_1.15fr_1fr_1.55fr_1fr_1.25fr_0.8fr] items-center gap-5 rounded-3xl bg-white/5 px-5 py-5 transition hover:bg-white/10"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#e7f2ea] text-sm font-black text-[#06251c]">
+                            {getInitial(rider.name)}
+                          </div>
+
+                          <div>
+                            <p className="font-black text-white">{rider.name}</p>
+                            <p className="mt-1 text-xs text-slate-400">
+                              Rider Saka
+                            </p>
+                          </div>
                         </div>
 
                         <div>
-                          <p className="font-black text-white">{rider.name}</p>
-                          <p className="mt-1 text-xs text-slate-400">
-                            Rider Saka
+                          <p className="text-xs font-bold text-slate-400">
+                            WhatsApp
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-white">
+                            {rider.phone || "Belum diisi"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-bold text-slate-400">
+                            Login
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-white">
+                            {rider.username || createUsername(rider.name)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-bold text-slate-400">
+                            Cabang
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-white">
+                            {rider.stand || rider.location || "Belum ditentukan"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <span
+                            className={`inline-flex rounded-full px-4 py-2 text-xs font-black ${accountStatusClass(
+                              rider.accountStatus
+                            )}`}
+                          >
+                            {rider.accountStatus || "Aktif"}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span
+                            className={`inline-flex rounded-full px-4 py-2 text-xs font-black ${operationalStatusClass(
+                              rider.operationalStatus
+                            )}`}
+                          >
+                            {rider.operationalStatus || "Tidak Beroperasi"}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(rider)}
+                            className="rounded-full bg-white/10 p-3 text-slate-200 transition hover:bg-white hover:text-[#06251c]"
+                          >
+                            <MdEdit />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(rider.id)}
+                            className="rounded-full bg-red-500/20 p-3 text-red-300 transition hover:bg-red-500 hover:text-white"
+                          >
+                            <MdDelete />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="lg:hidden space-y-4">
+                  {paginatedRiders.map((rider) => (
+                    <div
+                      key={rider.id}
+                      className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e7f2ea] text-sm font-black text-[#06251c]">
+                            {getInitial(rider.name)}
+                          </div>
+                          <div>
+                            <p className="font-black text-white">{rider.name}</p>
+                            <p className="mt-1 text-xs text-slate-400">Rider Saka</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 text-right">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-2 text-xs font-black ${accountStatusClass(
+                              rider.accountStatus
+                            )}`}
+                          >
+                            {rider.accountStatus || "Aktif"}
+                          </span>
+                          <span
+                            className={`inline-flex rounded-full px-3 py-2 text-xs font-black ${operationalStatusClass(
+                              rider.operationalStatus
+                            )}`}
+                          >
+                            {rider.operationalStatus || "Tidak Beroperasi"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 space-y-3 text-sm text-slate-300">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                            No HP
+                          </p>
+                          <p className="mt-1 font-bold text-white">
+                            {rider.phone || "Belum diisi"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                            Username
+                          </p>
+                          <p className="mt-1 font-bold text-white">
+                            {rider.username || createUsername(rider.name)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                            Stand Tugas
+                          </p>
+                          <p className="mt-1 font-bold text-white">
+                            {rider.stand || rider.location || "Belum ditentukan"}
                           </p>
                         </div>
                       </div>
 
-                      <div>
-                        <p className="text-xs font-bold text-slate-400">
-                          WhatsApp
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-white">
-                          {rider.phone || "Belum diisi"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-bold text-slate-400">
-                          Login
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-white">
-                          {rider.username || createUsername(rider.name)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-bold text-slate-400">
-                          Cabang
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-white">
-                          {rider.stand || rider.location || "Belum ditentukan"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <span
-                          className={`inline-flex rounded-full px-4 py-2 text-xs font-black ${accountStatusClass(
-                            rider.accountStatus
-                          )}`}
-                        >
-                          {rider.accountStatus || "Aktif"}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span
-                          className={`inline-flex rounded-full px-4 py-2 text-xs font-black ${operationalStatusClass(
-                            rider.operationalStatus
-                          )}`}
-                        >
-                          {rider.operationalStatus || "Tidak Beroperasi"}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-end gap-2">
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
                         <button
                           type="button"
                           onClick={() => handleEdit(rider)}
-                          className="rounded-full bg-white/10 p-3 text-slate-200 transition hover:bg-white hover:text-[#06251c]"
+                          className="inline-flex items-center justify-center rounded-full bg-white/10 px-4 py-2 text-sm font-black text-slate-200 transition hover:bg-white hover:text-[#06251c]"
                         >
-                          <MdEdit />
+                          <MdEdit className="mr-2" /> Edit
                         </button>
-
                         <button
                           type="button"
                           onClick={() => handleDelete(rider.id)}
-                          className="rounded-full bg-red-500/20 p-3 text-red-300 transition hover:bg-red-500 hover:text-white"
+                          className="inline-flex items-center justify-center rounded-full bg-red-500/20 px-4 py-2 text-sm font-black text-red-300 transition hover:bg-red-500 hover:text-white"
                         >
-                          <MdDelete />
+                          <MdDelete className="mr-2" /> Hapus
                         </button>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
+
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          )}
 
           <div className="mt-6 rounded-3xl bg-white/5 p-5">
             <h3 className="text-sm font-black text-white">Catatan</h3>

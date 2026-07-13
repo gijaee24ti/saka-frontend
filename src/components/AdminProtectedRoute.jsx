@@ -10,7 +10,10 @@ export default function AdminProtectedRoute() {
   try {
     const parsedSession = JSON.parse(session);
 
-    if (!parsedSession.isLoggedIn || parsedSession.role !== "Admin") {
+    const isAdminLoggedIn =
+      parsedSession?.isLoggedIn === true && parsedSession?.role === "Admin";
+
+    if (!isAdminLoggedIn) {
       localStorage.removeItem("saka_admin_session");
       return <Navigate to="/login" replace />;
     }

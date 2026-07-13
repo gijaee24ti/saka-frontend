@@ -4,35 +4,18 @@ import {
   MdCheckCircle,
   MdInventory,
   MdLocalCafe,
-  MdLocationOn,
   MdPerson,
-  MdSave,
   MdStorefront,
   MdWarningAmber,
   MdLogin,
   MdLock,
-  MdLogout,
   MdInfo,
+  MdUpdate,
 } from "react-icons/md";
-
-const defaultLocations = [
-  {
-    id: 1,
-    branch: "Cabang Arifin Ahmad",
-    vehicle: "Bajaj",
-    openTime: "10:00",
-    closeTime: "18:00",
-    status: "Aktif",
-  },
-  {
-    id: 2,
-    branch: "Cabang Rumbai",
-    vehicle: "Tenda",
-    openTime: "10:00",
-    closeTime: "18:00",
-    status: "Aktif",
-  },
-];
+import api from "../../services/api";
+import RiderLayout from "../../layouts/RiderLayout";
+import { usePagination } from "../../hooks/usePagination";
+import Pagination from "../../components/Pagination";
 
 const operationalOptions = [
   {
@@ -68,83 +51,30 @@ const operationalOptions = [
 ];
 
 export default function RiderDashboard() {
-  const [riders, setRiders] = useState(() => {
-    const saved = localStorage.getItem("saka_riders");
-
-    if (!saved) return [];
-
-    try {
-      const parsed = JSON.parse(saved);
-
-      const oldDefaultNames = ["Aris Setiawan", "Budi Kusuma"];
-
-      const isOldDefaultData =
-        parsed.length <= 2 &&
-        parsed.every((rider) => oldDefaultNames.includes(rider.name));
-
-      if (isOldDefaultData) {
-        localStorage.removeItem("saka_riders");
-        localStorage.removeItem("saka_current_rider_id");
-        localStorage.removeItem("saka_rider_session");
-        return [];
-      }
-
-      return parsed;
-    } catch (error) {
-      localStorage.removeItem("saka_riders");
-      localStorage.removeItem("saka_current_rider_id");
-      localStorage.removeItem("saka_rider_session");
-      return [];
-    }
-  });
-
-  const [locations, setLocations] = useState(() => {
-    const saved = localStorage.getItem("saka_locations");
-
-    if (!saved) return defaultLocations;
-
-    try {
-      return JSON.parse(saved);
-    } catch (error) {
-      localStorage.removeItem("saka_locations");
-      return defaultLocations;
-    }
-  });
-
-  const [inventory, setInventory] = useState(() => {
-    const saved = localStorage.getItem("saka_inventory");
-
-    if (!saved) return [];
-
-    try {
-      return JSON.parse(saved);
-    } catch (error) {
-      localStorage.removeItem("saka_inventory");
-      return [];
-    }
-  });
+  const [riders, setRiders] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const [currentRiderId, setCurrentRiderId] = useState(() => {
     const session = localStorage.getItem("saka_rider_session");
 
-    if (!session) {
-      localStorage.removeItem("saka_current_rider_id");
-      return "";
-    }
+    if (!session) return "";
 
     try {
       const parsedSession = JSON.parse(session);
 
-      if (!parsedSession.isLoggedIn) {
-        localStorage.removeItem("saka_current_rider_id");
+      // Validate both isLoggedIn flag AND token existence
+      if (!parsedSession.isLoggedIn || !parsedSession.token) {
         localStorage.removeItem("saka_rider_session");
+        localStorage.removeItem("saka_current_rider_id");
         return "";
       }
 
       return String(parsedSession.id || "");
     } catch (error) {
-      localStorage.removeItem("saka_current_rider_id");
       localStorage.removeItem("saka_rider_session");
+      localStorage.removeItem("saka_current_rider_id");
       return "";
     }
   });
@@ -154,7 +84,7 @@ export default function RiderDashboard() {
     password: "",
   });
 
-  const [stockInput, setStockInput] = useState({});
+
 
   const [notice, setNotice] = useState({
     type: "",
@@ -169,41 +99,268 @@ export default function RiderDashboard() {
     }, 3500);
   };
 
+  const getErrorMessage = (error, fallback) => {
+    const message = error?.response?.data?.message;
+    const errors = error?.response?.data?.errors;
+
+    if (message) return message;
+
+    if (errors) {
+      const firstError = Object.values(errors)[0];
+
+      if (Array.isArray(firstError)) {
+        return firstError[0];
+      }
+    }
+
+    return fallback;
+  };
+
+  const toArray = (response) => {
+    if (Array.isArray(response?.data)) return response.data;
+    if (Array.isArray(response?.data?.data)) return response.data.data;
+    return [];
+  };
+
+  const formatTime = (value) => {
+    if (!value) return "";
+
+    const text = String(value);
+
+    if (text.includes("T")) {
+      return text.split("T")[1]?.slice(0, 5) || "";
+    }
+
+    if (text.includes(" ")) {
+      return text.split(" ")[1]?.slice(0, 5) || "";
+    }
+
+    return text.slice(0, 5);
+  };
+
+  const getDatePart = (value) => {
+    if (!value) return "";
+
+    const text = String(value);
+
+    if (text.includes("T")) return text.split("T")[0];
+    if (text.includes(" ")) return text.split(" ")[0]?.slice(0, 10) || "";
+
+    return text.length >= 10 ? text.slice(0, 10) : "";
+  };
+
+  const formatDisplayDate = (value) => {
+    if (!value) return "-";
+
+    const dateStr = getDatePart(value);
+
+    if (!dateStr) return "-";
+
+    const date = new Date(dateStr);
+
+    if (Number.isNaN(date.getTime())) return dateStr;
+
+    return date.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  const getCurrentTime = () => {
+    return new Date().toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const normalizeLocationFromApi = (item) => ({
+    id: item.id,
+    branch: item.branch || "",
+    vehicle: item.vehicle || "Sepeda",
+    openTime: formatTime(item.open_time),
+    closeTime: formatTime(item.close_time),
+    status: item.status || "Tidak Beroperasi",
+    address: item.address || "",
+    mapsLink: item.maps_link || "",
+    note: item.note || "",
+  });
+
+  const normalizeRiderFromApi = (item, outletList = []) => {
+    const outletId = item.outlet_id || item.outlet?.id || "";
+    const outlet =
+      item.outlet || outletList.find((location) => location.id === outletId);
+
+    return {
+      id: item.id,
+      name: item.name || "",
+      phone: item.phone || "",
+      username: item.username || "",
+      accountStatus: item.account_status || "Aktif",
+      operationalStatus: item.operational_status || "Tidak Beroperasi",
+      status:
+        item.operational_status === "Berjualan"
+          ? "Active"
+          : item.operational_status === "Istirahat"
+            ? "Break"
+            : "Inactive",
+      stand: outlet?.branch || item.stand || item.location || "",
+      location: outlet?.branch || item.stand || item.location || "",
+      outletId,
+      note: item.note || "",
+    };
+  };
+
+  const normalizeStockFromApi = (item, outletList = [], riderList = []) => {
+    const outletId = item.outlet_id || item.outlet?.id || item.outletId || "";
+    const riderId = item.rider_id || item.rider?.id || item.riderId || "";
+
+    const outlet =
+      item.outlet || outletList.find((location) => location.id === outletId);
+    const rider = item.rider || riderList.find((data) => data.id === riderId);
+    const menu = item.menu || {};
+
+    return {
+      id: item.id,
+      outletId,
+      riderId,
+      menuId: item.menu_id || item.menu?.id || item.menuId || "",
+      branch:
+        item.branch ||
+        item.outlet_branch ||
+        item.outletBranch ||
+        outlet?.branch ||
+        "",
+      outletType:
+        item.outlet_type ||
+        item.outletType ||
+        outlet?.vehicle ||
+        "",
+      riderName:
+        item.rider_name ||
+        item.riderName ||
+        rider?.name ||
+        "",
+      productName:
+        item.product_name ||
+        item.productName ||
+        menu?.name ||
+        "",
+      category: menu?.category || "",
+      stockStatus: item.stock_status || item.stockStatus || "Tersedia",
+      updatedAtRaw:
+        item.updated_time ||
+        item.input_time ||
+        item.updatedAt ||
+        item.updated_at ||
+        "",
+      updatedAt: formatTime(
+        item.updated_time ||
+          item.input_time ||
+          item.updatedAt ||
+          item.updated_at
+      ),
+      updatedBy: item.updated_by || item.updatedBy || "",
+      note: item.note || "",
+    };
+  };
+
+  const doAutoLogout = (message) => {
+    localStorage.removeItem("saka_current_rider_id");
+    localStorage.removeItem("saka_rider_session");
+    setCurrentRiderId("");
+    setRiders([]);
+    setLocations([]);
+    setInventory([]);
+    showNotice("error", message || "Sesi telah berakhir. Silakan login kembali.");
+  };
+
+  const fetchDashboardData = async () => {
+    // Check token before making authenticated calls
+    const session = localStorage.getItem("saka_rider_session");
+    let hasToken = false;
+    try {
+      const parsed = JSON.parse(session || "{}");
+      hasToken = !!parsed.token;
+    } catch {
+      // invalid JSON
+    }
+
+    if (!hasToken) {
+      doAutoLogout("Sesi tidak valid. Silakan login kembali.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Fetch public data first (doesn't require auth)
+      const outletResponse = await api.get("/public/outlets");
+      const outletData = toArray(outletResponse).map(normalizeLocationFromApi);
+
+      // Fetch authenticated data sequentially so we can stop on 401
+      // instead of firing both requests and getting duplicate errors
+      const riderResponse = await api.get("/rider/profile");
+      const riderRaw = riderResponse.data?.rider || riderResponse.data?.data || riderResponse.data;
+      const riderData = riderRaw ? [normalizeRiderFromApi(riderRaw, outletData)] : [];
+
+      const stockResponse = await api.get("/rider/stocks");
+      const stockData = toArray(stockResponse).map((item) =>
+        normalizeStockFromApi(item, outletData, riderData)
+      );
+
+      setLocations(outletData);
+      setRiders(riderData);
+      setInventory(stockData);
+    } catch (error) {
+      // If token is expired/invalid (401) or forbidden (403), auto-logout
+      // so the rider sees the login form instead of being stuck on loading
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        doAutoLogout("Sesi telah berakhir. Silakan login kembali.");
+        return;
+      }
+
+      showNotice(
+        "error",
+        getErrorMessage(error, "Gagal mengambil data rider dari backend.")
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentRiderId) {
+      fetchDashboardData();
+    }
+  }, [currentRiderId]);
+
   const currentRider = useMemo(() => {
     return riders.find((rider) => String(rider.id) === String(currentRiderId));
   }, [riders, currentRiderId]);
 
   useEffect(() => {
-    localStorage.setItem("saka_riders", JSON.stringify(riders));
-  }, [riders]);
+    if (!currentRiderId || loading) return;
 
-  useEffect(() => {
-    localStorage.setItem("saka_locations", JSON.stringify(locations));
-  }, [locations]);
-
-  useEffect(() => {
-    localStorage.setItem("saka_inventory", JSON.stringify(inventory));
-  }, [inventory]);
-
-  useEffect(() => {
-    if (!currentRiderId) return;
+    if (riders.length === 0) return;
 
     const riderStillExists = riders.some(
       (rider) => String(rider.id) === String(currentRiderId)
     );
 
     if (!riderStillExists) {
-      setCurrentRiderId("");
       localStorage.removeItem("saka_current_rider_id");
       localStorage.removeItem("saka_rider_session");
+      setCurrentRiderId("");
     }
-  }, [riders, currentRiderId]);
+  }, [riders, currentRiderId, loading]);
 
   const selectedLocation = useMemo(() => {
     if (!currentRider) return null;
 
     return locations.find(
       (location) =>
+        String(location.id) === String(currentRider.outletId) ||
         location.branch === currentRider.stand ||
         location.branch === currentRider.location
     );
@@ -213,37 +370,46 @@ export default function RiderDashboard() {
     if (!currentRider) return [];
 
     return inventory.filter((item) => {
-      const sameRider =
+      // Hide Literan products
+      const isLiteran =
+        item.category === "Literan" ||
+        (item.productName || "").toLowerCase().includes("literan");
+      if (isLiteran) return false;
+
+      const sameRiderId =
+        String(item.riderId || "") === String(currentRider.id || "");
+
+      const sameRiderName =
         item.riderName === currentRider.name ||
-        item.rider === currentRider.name ||
-        String(item.riderId || "") === String(currentRider.id);
+        item.rider === currentRider.name;
 
       const sameStandWithoutRider =
         !item.riderName &&
         (item.branch === currentRider.stand ||
           item.branch === currentRider.location);
 
-      return sameRider || sameStandWithoutRider;
+      return sameRiderId || sameRiderName || sameStandWithoutRider;
     });
   }, [inventory, currentRider]);
 
+  const {
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    currentData: paginatedInventory,
+  } = usePagination(riderInventory, 3);
+
   const totalProduct = riderInventory.length;
-
-  const totalInitialStock = riderInventory.reduce(
-    (total, item) => total + Number(item.initialStock || 0),
-    0
-  );
-
-  const totalRemainingStock = riderInventory.reduce((total, item) => {
-    const remaining =
-      item.remainingStock === undefined || item.remainingStock === ""
-        ? Number(item.initialStock || 0)
-        : Number(item.remainingStock || 0);
-
-    return total + remaining;
-  }, 0);
-
-  const totalSoldStock = totalInitialStock - totalRemainingStock;
+  const totalAvailable = riderInventory.filter(
+    (item) => item.stockStatus === "Tersedia"
+  ).length;
+  const totalUnavailable = riderInventory.filter(
+    (item) => item.stockStatus !== "Tersedia"
+  ).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const totalUpdatedToday = riderInventory.filter(
+    (item) => getDatePart(item.updatedAtRaw) === today
+  ).length;
 
   const formatStatusLabel = (status) => {
     if (status === "Berjualan") return "Buka";
@@ -258,33 +424,14 @@ export default function RiderDashboard() {
     return "bg-slate-500/20 text-slate-300";
   };
 
-  const getStockStatus = (item) => {
-    const initial = Number(item.initialStock || 0);
-    const remaining =
-      item.remainingStock === undefined || item.remainingStock === ""
-        ? initial
-        : Number(item.remainingStock || 0);
-
-    if (remaining <= 0) return "Habis";
-
-    const percentage = initial > 0 ? (remaining / initial) * 100 : 100;
-
-    if (percentage <= 20) return "Hampir Habis";
-    return "Tersedia";
-  };
-
   const getStockColor = (status) => {
     if (status === "Tersedia") return "bg-emerald-500/20 text-emerald-300";
-    if (status === "Hampir Habis") return "bg-yellow-500/20 text-yellow-300";
     return "bg-red-500/20 text-red-300";
   };
 
-  const getCurrentRemaining = (item) => {
-    if (item.remainingStock === undefined || item.remainingStock === "") {
-      return Number(item.initialStock || 0);
-    }
-
-    return Number(item.remainingStock || 0);
+  const getStockBadgeLabel = (status) => {
+    if (status === "Tersedia") return "🟢 Tersedia";
+    return "🔴 Tidak Tersedia";
   };
 
   const getProductNote = (item) => {
@@ -295,7 +442,7 @@ export default function RiderDashboard() {
     }
 
     if (productName.includes("donat")) {
-      return "Donat saat ini tersedia di Cabang Stadion / Nagasakti, Cabang Rumbai, dan Cabang Hang Tuah Ujung. Ketersediaan dapat berubah mengikuti kebijakan outlet.";
+      return "Donat saat ini tersedia di Cabang Stadion Nagasakti, Cabang Rumbai, dan Cabang Hang Tuah Ujung. Ketersediaan dapat berubah mengikuti kebijakan outlet.";
     }
 
     return "";
@@ -310,7 +457,7 @@ export default function RiderDashboard() {
     }));
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
 
     if (!loginForm.username || !loginForm.password) {
@@ -318,61 +465,69 @@ export default function RiderDashboard() {
       return;
     }
 
-    if (riders.length === 0) {
+    try {
+      setLoading(true);
+
+      const response = await api.post("/rider/login", {
+        username: loginForm.username.trim(),
+        password: loginForm.password,
+      });
+
+      const riderData =
+        response.data?.rider ||
+        response.data?.user ||
+        response.data?.data ||
+        {};
+
+      if (riderData.account_status === "Nonaktif") {
+        showNotice("error", "Akun rider ini sedang nonaktif.");
+        return;
+      }
+
+      localStorage.setItem("saka_current_rider_id", String(riderData.id));
+
+      localStorage.setItem(
+        "saka_rider_session",
+        JSON.stringify({
+          id: riderData.id,
+          name: riderData.name,
+          username: riderData.username || loginForm.username.trim(),
+          role: "Rider",
+          token: response.data?.token || null,
+          isLoggedIn: true,
+          loginAt: new Date().toISOString(),
+        })
+      );
+
+      setCurrentRiderId(String(riderData.id));
+      setLoginForm({ username: "", password: "" });
+      setNotice({ type: "", text: "" });
+    } catch (error) {
       showNotice(
         "error",
-        "Belum ada data rider. Tambahkan data rider dari halaman admin dulu."
+        getErrorMessage(error, "Username atau password rider salah.")
       );
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    const foundRider = riders.find((rider) => {
-      const riderUsername = (rider.username || "").toLowerCase().trim();
-      const inputUsername = loginForm.username.toLowerCase().trim();
-
-      return (
-        riderUsername === inputUsername &&
-        String(rider.password || "") === String(loginForm.password)
-      );
-    });
-
-    if (!foundRider) {
-      showNotice("error", "Username atau password rider salah.");
-      return;
-    }
-
-    if (foundRider.accountStatus === "Nonaktif") {
-      showNotice("error", "Akun rider ini sedang nonaktif.");
-      return;
-    }
-
-    localStorage.setItem("saka_current_rider_id", foundRider.id);
-
-    localStorage.setItem(
-      "saka_rider_session",
-      JSON.stringify({
-        id: foundRider.id,
-        name: foundRider.name,
-        username: foundRider.username,
-        isLoggedIn: true,
-        loginAt: new Date().toISOString(),
-      })
-    );
-
-    setCurrentRiderId(String(foundRider.id));
-    setLoginForm({ username: "", password: "" });
-    setNotice({ type: "", text: "" });
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.post("/rider/logout");
+    } catch {
+      // Token may already be expired, proceed with local cleanup
+    }
     localStorage.removeItem("saka_current_rider_id");
     localStorage.removeItem("saka_rider_session");
     setCurrentRiderId("");
-    setStockInput({});
+    setRiders([]);
+    setLocations([]);
+    setInventory([]);
     setNotice({ type: "", text: "" });
   };
 
-  const handleOperationalChange = (e) => {
+  const handleOperationalChange = async (e) => {
     if (!currentRider) return;
 
     const selected = operationalOptions.find(
@@ -381,98 +536,98 @@ export default function RiderDashboard() {
 
     if (!selected) return;
 
-    const updatedRiders = riders.map((rider) =>
-      String(rider.id) === String(currentRider.id)
-        ? {
-            ...rider,
-            operationalStatus: selected.riderStatus,
-            status: selected.riderLegacyStatus,
-          }
-        : rider
-    );
+    try {
+      await api.patch("/rider/status", {
+        operational_status: selected.riderStatus,
+      });
 
-    const riderStand = currentRider.stand || currentRider.location;
+      setRiders((prev) =>
+        prev.map((rider) =>
+          String(rider.id) === String(currentRider.id)
+            ? {
+                ...rider,
+                operationalStatus: selected.riderStatus,
+                status: selected.riderLegacyStatus,
+              }
+            : rider
+        )
+      );
 
-    const updatedLocations = locations.map((location) =>
-      location.branch === riderStand
-        ? {
-            ...location,
-            status: selected.locationStatus,
-          }
-        : location
-    );
+      setLocations((prev) =>
+        prev.map((location) =>
+          String(location.id) === String(selectedLocation?.id)
+            ? {
+                ...location,
+                status: selected.locationStatus,
+              }
+            : location
+        )
+      );
 
-    setRiders(updatedRiders);
-    setLocations(updatedLocations);
-    showNotice("success", "Status operasional berhasil diperbarui.");
+      showNotice("success", "Status operasional berhasil diperbarui.");
+    } catch (error) {
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        doAutoLogout("Sesi telah berakhir. Silakan login kembali.");
+        return;
+      }
+      showNotice(
+        "error",
+        getErrorMessage(error, "Gagal memperbarui status operasional.")
+      );
+    }
   };
 
-  const handleStockInputChange = (id, value) => {
-    setStockInput((prev) => ({
-      ...prev,
-      [id]: value,
-    }));
-  };
-
-  const handleUpdateStock = (item) => {
+  const handleToggleStockStatus = async (item) => {
     if (!currentRider) return;
 
-    const inputValue = stockInput[item.id];
+    const newStatus = item.stockStatus === "Tersedia" ? "Tidak Tersedia" : "Tersedia";
+    const payload = {
+      stock_status: newStatus,
+    };
 
-    if (inputValue === undefined || inputValue === "") {
-      showNotice("error", "Isi stok sisa terlebih dahulu.");
-      return;
+    const now = getCurrentTime();
+
+    try {
+      await api.patch(`/rider/stocks/${item.id}/availability`, payload);
+
+      const updatedAtRaw = new Date().toISOString();
+
+      setInventory((prev) =>
+        prev.map((data) =>
+          data.id === item.id
+            ? {
+                ...data,
+                stockStatus: newStatus,
+                updatedAt: now,
+                updatedAtRaw,
+                updatedBy: currentRider.name,
+              }
+            : data
+        )
+      );
+
+      showNotice("success", `Status ${item.productName} berhasil diubah menjadi ${newStatus}.`);
+    } catch (error) {
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        doAutoLogout("Sesi telah berakhir. Silakan login kembali.");
+        return;
+      }
+      showNotice(
+        "error",
+        getErrorMessage(error, "Gagal memperbarui status ketersediaan.")
+      );
     }
-
-    const initialStock = Number(item.initialStock || 0);
-    const newRemaining = Number(inputValue);
-
-    if (newRemaining < 0) {
-      showNotice("error", "Stok sisa tidak boleh kurang dari 0.");
-      return;
-    }
-
-    if (newRemaining > initialStock) {
-      showNotice("error", "Stok sisa tidak boleh lebih besar dari stok awal.");
-      return;
-    }
-
-    const now = new Date().toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const updatedInventory = inventory.map((data) =>
-      data.id === item.id
-        ? {
-            ...data,
-            remainingStock: newRemaining,
-            updatedAt: now,
-            updatedBy: currentRider.name,
-            stockStatus: newRemaining > 0 ? "Tersedia" : "Habis",
-          }
-        : data
-    );
-
-    setInventory(updatedInventory);
-
-    setStockInput((prev) => ({
-      ...prev,
-      [item.id]: "",
-    }));
-
-    showNotice("success", "Stok berhasil diperbarui.");
   };
 
-  return (
-    <div className="saka-bubble-bg min-h-screen text-white">
+  const loginView = (
+    <div className="saka-bubble-bg min-h-screen overflow-x-hidden text-white">
       <div className="pointer-events-none fixed left-0 right-0 top-0 z-20 h-4 saka-checker-strip" />
 
-      <div className="saka-bubble-content mx-auto max-w-7xl px-5 py-8 md:px-8">
-        <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-          <div>
+      <div className="saka-bubble-content mx-auto max-w-7xl p-3 sm:p-4 md:p-6 lg:p-8">
+        <div className="mb-6 flex flex-col gap-4 md:mb-8 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0 max-w-full">
             <div className="mb-4">
-              <h1 className="text-4xl font-black tracking-[0.35em] text-white">
+              <h1 className="text-3xl font-black tracking-[0.25em] text-white sm:text-4xl sm:tracking-[0.35em]">
                 SAKA<span className="text-emerald-400">.</span>
               </h1>
 
@@ -487,430 +642,483 @@ export default function RiderDashboard() {
               Rider Panel
             </p>
 
-            <h2 className="mt-2 text-3xl font-black">
-              {currentRider ? "Dashboard Rider" : "Login Rider"}
-            </h2>
+            <h2 className="mt-2 text-2xl font-black sm:text-3xl">Login Rider</h2>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              {currentRider
-                ? "Halaman ini digunakan rider untuk memperbarui status operasional dan stok produk sesuai kondisi langsung di lapangan."
-                : "Masuk menggunakan akun rider untuk mengakses dashboard stok dan status operasional."}
+              Masuk menggunakan akun rider untuk mengakses dashboard stok dan status
+              operasional.
             </p>
           </div>
-
-          {currentRider && (
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex items-center justify-center gap-2 rounded-full bg-[#f7f0e6] px-5 py-3 text-sm font-black text-[#06251c] transition hover:bg-white"
-            >
-              <MdLogout />
-              Logout
-            </button>
-          )}
         </div>
 
-        {!currentRider ? (
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-center">
-            <div className="saka-panel bg-[#103c2e] p-8">
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-emerald-300">
-                Akses Khusus Rider
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-center lg:gap-8">
+          <div className="saka-panel max-w-full bg-[#103c2e] p-4 sm:p-6 lg:p-8">
+            <p className="text-xs font-black uppercase tracking-[0.35em] text-emerald-300">
+              Akses Khusus Rider
+            </p>
+
+            <h3 className="mt-3 text-2xl font-black text-white sm:text-3xl">
+              Update stok dan status hanya melalui akun rider.
+            </h3>
+
+            <p className="mt-4 text-sm leading-7 text-slate-300">
+              Setelah login, rider hanya bisa melihat data miliknya sendiri,
+              termasuk stand tugas, stok produk, catatan admin, dan status
+              operasional.
+            </p>
+
+            <div className="mt-6 rounded-3xl bg-white/5 p-4 sm:p-5">
+              <p className="text-sm font-black text-white">Catatan</p>
+              <p className="mt-2 text-xs leading-6 text-slate-300">
+                Username dan password dibuat oleh admin pada halaman Data
+                Rider. Data login rider sekarang diperiksa melalui backend
+                Laravel.
               </p>
-
-              <h3 className="mt-3 text-3xl font-black text-white">
-                Update stok dan status hanya melalui akun rider.
-              </h3>
-
-              <p className="mt-4 text-sm leading-7 text-slate-300">
-                Setelah login, rider hanya bisa melihat data miliknya sendiri,
-                termasuk stand tugas, stok produk, catatan admin, dan status
-                operasional.
-              </p>
-
-              <div className="mt-6 rounded-3xl bg-white/5 p-5">
-                <p className="text-sm font-black text-white">Catatan</p>
-                <p className="mt-2 text-xs leading-6 text-slate-300">
-                  Username dan password dibuat oleh admin pada halaman Data
-                  Rider. Jika data rider belum muncul, pastikan admin dan rider
-                  dibuka pada browser yang sama selama masih prototype.
-                </p>
-              </div>
-            </div>
-
-            <div className="saka-panel bg-[#f7f0e6] p-8 text-[#06251c] md:p-10">
-              <div className="mb-7 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#06251c] text-xl text-white">
-                  <MdLogin />
-                </div>
-
-                <div>
-                  <h2 className="text-2xl font-black">Masuk Rider</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Gunakan username dan password dari admin.
-                  </p>
-                </div>
-              </div>
-
-              <form onSubmit={handleLogin} className="space-y-5">
-                <div>
-                  <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                    Username
-                  </label>
-
-                  <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                    <MdPerson className="text-xl text-slate-400" />
-                    <input
-                      type="text"
-                      name="username"
-                      value={loginForm.username}
-                      onChange={handleLoginChange}
-                      placeholder="Contoh: gizza"
-                      className="w-full bg-transparent text-sm font-bold outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                    Password
-                  </label>
-
-                  <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                    <MdLock className="text-xl text-slate-400" />
-                    <input
-                      type="password"
-                      name="password"
-                      value={loginForm.password}
-                      onChange={handleLoginChange}
-                      placeholder="Masukkan password"
-                      className="w-full bg-transparent text-sm font-bold outline-none"
-                    />
-                  </div>
-                </div>
-
-                {notice.text && (
-                  <div
-                    className={`flex items-start gap-2 rounded-2xl px-4 py-3 text-xs font-bold leading-6 ${
-                      notice.type === "success"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    <MdWarningAmber className="mt-1 shrink-0" />
-                    <span>{notice.text}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-[#06251c] py-4 text-sm font-black text-white transition hover:bg-[#103c2e]"
-                >
-                  <MdLogin />
-                  Login Rider
-                </button>
-              </form>
             </div>
           </div>
-        ) : (
-          <>
-            {notice.text && (
-              <div
-                className={`mb-6 rounded-2xl px-5 py-4 text-sm font-bold ${
-                  notice.type === "success"
-                    ? "bg-emerald-500/20 text-emerald-200"
-                    : "bg-red-500/20 text-red-200"
-                }`}
+
+          <div className="saka-panel max-w-full bg-[#f7f0e6] p-4 text-[#06251c] sm:p-6 md:p-8 lg:p-10">
+            <div className="mb-6 flex items-center gap-3 md:mb-7">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#06251c] text-xl text-white">
+                <MdLogin />
+              </div>
+
+              <div className="min-w-0">
+                <h2 className="text-xl font-black sm:text-2xl">Masuk Rider</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Gunakan username dan password dari admin.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleLogin} className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                  Username
+                </label>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <MdPerson className="shrink-0 text-xl text-slate-400" />
+                  <input
+                    type="text"
+                    name="username"
+                    value={loginForm.username}
+                    onChange={handleLoginChange}
+                    placeholder="Contoh: rider_rumbai"
+                    className="w-full min-w-0 bg-transparent text-sm font-bold outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                  Password
+                </label>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <MdLock className="shrink-0 text-xl text-slate-400" />
+                  <input
+                    type="password"
+                    name="password"
+                    value={loginForm.password}
+                    onChange={handleLoginChange}
+                    placeholder="Masukkan password"
+                    className="w-full min-w-0 bg-transparent text-sm font-bold outline-none"
+                  />
+                </div>
+              </div>
+
+              {notice.text && (
+                <div
+                  className={`flex items-start gap-2 rounded-2xl px-4 py-3 text-xs font-bold leading-6 md:col-span-2 ${
+                    notice.type === "success"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  <MdWarningAmber className="mt-1 shrink-0" />
+                  <span>{notice.text}</span>
+                </div>
+              )}
+
+              {loading && (
+                <div className="rounded-2xl bg-slate-100 px-4 py-3 text-xs font-bold text-slate-600 md:col-span-2">
+                  Memproses login rider...
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full bg-[#06251c] py-4 text-sm font-black text-white transition-all duration-300 hover:bg-[#103c2e] disabled:cursor-not-allowed disabled:opacity-70 md:col-span-2"
               >
-                {notice.text}
-              </div>
-            )}
-
-            <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-              <div className="saka-card bg-[#f7f0e6] p-6 text-[#06251c]">
-                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#06251c] text-white">
-                  <MdPerson />
-                </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-                  Rider
-                </p>
-                <h3 className="mt-2 text-xl font-black">{currentRider.name}</h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  {currentRider.phone || "No HP belum diisi"}
-                </p>
-              </div>
-
-              <div className="saka-card bg-[#dff4ea] p-6 text-[#06251c]">
-                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#06251c] text-white">
-                  <MdLocationOn />
-                </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-                  Stand Tugas
-                </p>
-                <h3 className="mt-2 text-xl font-black">
-                  {currentRider.stand ||
-                    currentRider.location ||
-                    "Belum ditentukan"}
-                </h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  {selectedLocation
-                    ? `${selectedLocation.openTime || "-"} - ${
-                        selectedLocation.closeTime || "-"
-                      }`
-                    : "Jam belum tersedia"}
-                </p>
-              </div>
-
-              <div className="saka-card bg-white p-6 text-[#06251c]">
-                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#06251c] text-white">
-                  <MdInventory />
-                </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-                  Total Produk
-                </p>
-                <h3 className="mt-2 text-4xl font-black">{totalProduct}</h3>
-              </div>
-
-              <div className="saka-card bg-[#103c2e] p-6 text-white">
-                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white">
-                  <MdCheckCircle />
-                </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-400">
-                  Terjual
-                </p>
-                <h3 className="mt-2 text-4xl font-black">{totalSoldStock}</h3>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-              <div className="saka-panel bg-[#f7f0e6] p-7 text-[#06251c]">
-                <div className="mb-6 flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#06251c] text-white">
-                    <MdStorefront />
-                  </div>
-
-                  <div>
-                    <h2 className="text-xl font-black">Status Operasional</h2>
-                    <p className="text-xs text-slate-500">
-                      Update kondisi stand saat ini.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl bg-[#06251c] p-5 text-white">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                    Status Sekarang
-                  </p>
-
-                  <div className="mt-3">
-                    <span
-                      className={`inline-flex rounded-full px-4 py-2 text-xs font-black ${getOperationalColor(
-                        currentRider.operationalStatus
-                      )}`}
-                    >
-                      {formatStatusLabel(currentRider.operationalStatus)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-5">
-                  <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                    Ubah Status
-                  </label>
-
-                  <select
-                    value={currentRider.operationalStatus || "Tidak Beroperasi"}
-                    onChange={handleOperationalChange}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#06251c]"
-                  >
-                    {operationalOptions.map((option) => (
-                      <option key={option.riderStatus} value={option.riderStatus}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="mt-5 rounded-2xl bg-[#06251c]/10 p-4">
-                  <p className="text-xs font-bold leading-6 text-slate-600">
-                    Rider hanya mengubah status operasional, bukan mengubah
-                    lokasi stand. Lokasi tetap diatur oleh admin.
-                  </p>
-                </div>
-              </div>
-
-              <div className="saka-panel bg-[#103c2e] p-7 xl:col-span-2">
-                <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.35em] text-emerald-300">
-                      Update Stok
-                    </p>
-                    <h2 className="mt-2 text-2xl font-black text-white">
-                      Stok Produk Rider
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-300">
-                      Admin input stok awal. Rider mengisi stok sisa sesuai
-                      kondisi di lapangan.
-                    </p>
-                  </div>
-
-                  <div className="rounded-3xl bg-white/10 px-5 py-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-                      Sisa Stok
-                    </p>
-                    <p className="mt-1 text-2xl font-black text-white">
-                      {totalRemainingStock}
-                    </p>
-                  </div>
-                </div>
-
-                {riderInventory.length === 0 ? (
-                  <div className="rounded-3xl bg-white/5 p-8 text-center">
-                    <MdWarningAmber className="mx-auto text-5xl text-yellow-300" />
-                    <h3 className="mt-4 text-xl font-black text-white">
-                      Belum Ada Stok
-                    </h3>
-                    <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-300">
-                      Admin belum menambahkan stok untuk rider ini. Tambahkan
-                      data stok dari halaman Monitoring Stok admin terlebih dahulu.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {riderInventory.map((item) => {
-                      const currentRemaining = getCurrentRemaining(item);
-                      const sold =
-                        Number(item.initialStock || 0) - currentRemaining;
-                      const stockStatus = getStockStatus(item);
-                      const productNote = getProductNote(item);
-
-                      return (
-                        <div
-                          key={item.id}
-                          className="rounded-3xl bg-white/5 p-5 transition hover:bg-white/10"
-                        >
-                          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                            <div className="flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white">
-                                  <MdLocalCafe />
-                                </div>
-
-                                <div>
-                                  <h3 className="text-lg font-black text-white">
-                                    {item.productName || "Produk"}
-                                  </h3>
-                                  <p className="mt-1 text-xs text-slate-400">
-                                    {item.branch || currentRider.stand}
-                                  </p>
-                                </div>
-
-                                <span
-                                  className={`ml-0 rounded-full px-4 py-1 text-xs font-black lg:ml-3 ${getStockColor(
-                                    stockStatus
-                                  )}`}
-                                >
-                                  {stockStatus}
-                                </span>
-                              </div>
-
-                              {productNote && (
-                                <div className="mt-4 flex items-start gap-2 rounded-2xl bg-blue-500/15 p-4 text-xs font-bold leading-6 text-blue-200">
-                                  <MdInfo className="mt-1 shrink-0" />
-                                  <span>{productNote}</span>
-                                </div>
-                              )}
-
-                              <div className="mt-5 grid grid-cols-3 gap-3">
-                                <div className="rounded-2xl bg-white/10 p-4">
-                                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-                                    Awal
-                                  </p>
-                                  <p className="mt-2 text-2xl font-black text-white">
-                                    {item.initialStock || 0}
-                                  </p>
-                                </div>
-
-                                <div className="rounded-2xl bg-white/10 p-4">
-                                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-                                    Sisa
-                                  </p>
-                                  <p className="mt-2 text-2xl font-black text-white">
-                                    {currentRemaining}
-                                  </p>
-                                </div>
-
-                                <div className="rounded-2xl bg-white/10 p-4">
-                                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-                                    Terjual
-                                  </p>
-                                  <p className="mt-2 text-2xl font-black text-white">
-                                    {sold < 0 ? 0 : sold}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="mt-4 rounded-2xl bg-white/5 p-4">
-                                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-                                  Catatan Admin
-                                </p>
-                                <p className="mt-2 text-sm leading-6 text-slate-300">
-                                  {item.note && item.note !== "-"
-                                    ? item.note
-                                    : "Tidak ada catatan dari admin."}
-                                </p>
-                              </div>
-
-                              <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-                                <MdAccessTime />
-                                <span>
-                                  Update terakhir: {item.updatedAt || "-"}
-                                  {item.updatedBy
-                                    ? ` oleh ${item.updatedBy}`
-                                    : ""}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="w-full rounded-3xl bg-[#f7f0e6] p-5 text-[#06251c] lg:w-72">
-                              <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                                Input Stok Sisa
-                              </label>
-
-                              <input
-                                type="number"
-                                min="0"
-                                max={item.initialStock || 0}
-                                value={stockInput[item.id] || ""}
-                                onChange={(e) =>
-                                  handleStockInputChange(
-                                    item.id,
-                                    e.target.value
-                                  )
-                                }
-                                placeholder={`Saat ini: ${currentRemaining}`}
-                                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#06251c]"
-                              />
-
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStock(item)}
-                                className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#06251c] py-3 text-sm font-black text-white transition hover:bg-[#103c2e]"
-                              >
-                                <MdSave />
-                                Simpan Stok
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        )}
+                <MdLogin />
+                Login Rider
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
+  );
+
+  if (!currentRiderId) {
+    return loginView;
+  }
+
+  if (!currentRider) {
+    return (
+      <div className="saka-bubble-bg min-h-screen overflow-x-hidden text-white">
+        <div className="pointer-events-none fixed left-0 right-0 top-0 z-20 h-4 saka-checker-strip" />
+        <div className="flex min-h-screen items-center justify-center p-4">
+          <div className="max-w-full rounded-3xl bg-white/5 px-6 py-8 text-center">
+            <MdWarningAmber className="mx-auto text-5xl text-yellow-300" />
+            <h3 className="mt-4 text-xl font-black">Memuat Dashboard</h3>
+            <p className="mt-2 text-sm text-slate-300">
+              Sedang mengambil data rider...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <RiderLayout
+      rider={currentRider}
+      selectedLocation={selectedLocation}
+      operationalStatus={currentRider?.operationalStatus}
+      formatStatusLabel={formatStatusLabel}
+      getOperationalColor={getOperationalColor}
+      onLogout={handleLogout}
+    >
+      <div className="mx-auto max-w-7xl p-3 text-white sm:p-4 md:p-6 lg:p-8">
+        <div className="mb-6 hidden lg:block">
+          <p className="text-xs font-black uppercase tracking-[0.35em] text-emerald-300">
+            Rider Panel
+          </p>
+          <h2 className="mt-2 text-3xl font-black">Dashboard Rider</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+            Halaman ini digunakan rider untuk memperbarui status operasional dan stok
+            produk sesuai kondisi langsung di lapangan.
+          </p>
+        </div>
+
+        {notice.text && (
+          <div
+            className={`mb-6 max-w-full rounded-2xl px-4 py-3 text-sm font-bold sm:px-5 sm:py-4 ${
+              notice.type === "success"
+                ? "bg-emerald-500/20 text-emerald-200"
+                : "bg-red-500/20 text-red-200"
+            }`}
+          >
+            {notice.text}
+          </div>
+        )}
+
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+          <div className="saka-card bg-white rounded-3xl p-4 sm:p-5 md:p-6 text-[#06251c] flex flex-col justify-between shadow-sm">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-[#e6ddd0] text-[#06251c]">
+                <MdInventory className="text-xl sm:text-2xl" />
+              </div>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.1em] text-[#06251c]">
+                Semua
+              </span>
+            </div>
+            <div>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-500">
+                Total Produk
+              </p>
+              <h3 className="mt-1 sm:mt-2 text-3xl font-black sm:text-4xl">
+                {totalProduct < 10 && totalProduct > 0 ? `0${totalProduct}` : totalProduct === 0 ? "00" : totalProduct}
+              </h3>
+            </div>
+          </div>
+
+          <div className="saka-card bg-white rounded-3xl p-4 sm:p-5 md:p-6 text-[#06251c] flex flex-col justify-between shadow-sm">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-[#dff4ea] text-emerald-600">
+                <MdCheckCircle className="text-xl sm:text-2xl" />
+              </div>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.1em] text-emerald-600">
+                Aman
+              </span>
+            </div>
+            <div>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-500">
+                Tersedia
+              </p>
+              <h3 className="mt-1 sm:mt-2 text-3xl font-black sm:text-4xl text-emerald-700">
+                {totalAvailable < 10 && totalAvailable > 0 ? `0${totalAvailable}` : totalAvailable === 0 ? "00" : totalAvailable}
+              </h3>
+            </div>
+          </div>
+
+          <div className="saka-card bg-white rounded-3xl p-4 sm:p-5 md:p-6 text-[#06251c] flex flex-col justify-between shadow-sm">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-red-100 text-red-600">
+                <MdWarningAmber className="text-xl sm:text-2xl" />
+              </div>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.1em] text-red-500">
+                Habis
+              </span>
+            </div>
+            <div>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-500">
+                Tidak Tersedia
+              </p>
+              <h3 className="mt-1 sm:mt-2 text-3xl font-black sm:text-4xl text-red-600">
+                {totalUnavailable < 10 && totalUnavailable > 0 ? `0${totalUnavailable}` : totalUnavailable === 0 ? "00" : totalUnavailable}
+              </h3>
+            </div>
+          </div>
+
+          <div className="saka-card bg-white rounded-3xl p-4 sm:p-5 md:p-6 text-[#06251c] flex flex-col justify-between shadow-sm">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                <MdUpdate className="text-xl sm:text-2xl" />
+              </div>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">
+                Hari Ini
+              </span>
+            </div>
+            <div>
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-500">
+                Update
+              </p>
+              <h3 className="mt-1 sm:mt-2 text-3xl font-black sm:text-4xl">
+                {totalUpdatedToday < 10 && totalUpdatedToday > 0 ? `0${totalUpdatedToday}` : totalUpdatedToday === 0 ? "00" : totalUpdatedToday}
+              </h3>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 items-start gap-4 md:gap-6 xl:grid-cols-3">
+          <div className="saka-panel max-w-full bg-[#f7f0e6] p-4 text-[#06251c] sm:p-5 md:p-6 lg:p-7">
+            <div className="mb-5 flex items-center gap-3 md:mb-6">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#06251c] text-white">
+                <MdStorefront />
+              </div>
+
+              <div className="min-w-0">
+                <h2 className="text-lg font-black sm:text-xl">Status Operasional</h2>
+                <p className="text-xs text-slate-500">Update kondisi stand saat ini.</p>
+              </div>
+            </div>
+
+            <div className="rounded-3xl bg-[#06251c] p-4 text-white sm:p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                Status Sekarang
+              </p>
+
+              <div className="mt-3">
+                <span
+                  className={`inline-flex rounded-full px-4 py-2 text-xs font-black ${getOperationalColor(
+                    currentRider.operationalStatus
+                  )}`}
+                >
+                  {formatStatusLabel(currentRider.operationalStatus)}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                  Ubah Status
+                </label>
+
+                <select
+                  value={currentRider.operationalStatus || "Tidak Beroperasi"}
+                  onChange={handleOperationalChange}
+                  className="min-h-[44px] w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none transition-all duration-300 focus:border-[#06251c]"
+                >
+                  {operationalOptions.map((option) => (
+                    <option key={option.riderStatus} value={option.riderStatus}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl bg-[#06251c]/10 p-4">
+              <p className="text-xs font-bold leading-6 text-slate-600">
+                Rider hanya mengubah status operasional, bukan mengubah lokasi stand.
+                Lokasi tetap diatur oleh admin.
+              </p>
+            </div>
+          </div>
+
+          <div className="saka-panel max-w-full bg-[#103c2e] p-4 sm:p-5 md:p-6 lg:p-7 xl:col-span-2">
+            <div className="mb-5 flex flex-col gap-3 sm:mb-6 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.35em] text-emerald-300">
+                  Update Ketersediaan
+                </p>
+                <h2 className="mt-2 text-xl font-black text-white sm:text-2xl">
+                  Status Produk Rider
+                </h2>
+                <p className="mt-1 text-sm text-slate-300">
+                  Kelola ketersediaan produk outlet Anda. Ketuk tombol untuk mengubah
+                  status produk.
+                </p>
+              </div>
+
+              <div className="shrink-0 rounded-3xl bg-white/10 px-4 py-3 sm:px-5 sm:py-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+                  Tersedia
+                </p>
+                <p className="mt-1 text-2xl font-black text-white">{totalAvailable}</p>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="rounded-3xl bg-white/5 p-6 text-center sm:p-8">
+                <MdWarningAmber className="mx-auto text-5xl text-yellow-300" />
+                <h3 className="mt-4 text-xl font-black text-white">Mengambil Data</h3>
+                <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-300">
+                  Data rider sedang diambil dari backend.
+                </p>
+              </div>
+            ) : riderInventory.length === 0 ? (
+              <div className="rounded-3xl bg-white/5 p-6 text-center sm:p-8">
+                <MdWarningAmber className="mx-auto text-5xl text-yellow-300" />
+                <h3 className="mt-4 text-xl font-black text-white">Belum Ada Produk</h3>
+                <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-300">
+                  Admin belum menetapkan produk untuk rider/outlet ini. Silakan hubungi
+                  admin untuk menambahkan produk.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 sm:space-y-4">
+                {paginatedInventory.map((item) => {
+                  const stockStatus = item.stockStatus;
+                  const productNote = getProductNote(item);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="max-w-full rounded-3xl bg-white/5 p-4 transition-all duration-300 hover:bg-white/10 sm:p-5"
+                    >
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
+                              <MdLocalCafe />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <h3 className="break-words text-base font-black text-white sm:text-lg">
+                                {item.productName || "Produk"}
+                              </h3>
+                              <p className="mt-1 text-xs text-slate-400">
+                                {item.branch || currentRider.stand}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-bold text-slate-400">Status:</span>
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1.5 text-xs font-black ${getStockColor(
+                                  stockStatus
+                                )}`}
+                              >
+                                {getStockBadgeLabel(stockStatus)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-start gap-2 text-xs text-slate-400">
+                              <MdAccessTime className="mt-0.5 shrink-0" />
+                              <span>
+                                Terakhir Update:{" "}
+                                {formatDisplayDate(item.updatedAtRaw)}
+                                {item.updatedAt ? ` · ${item.updatedAt}` : ""}
+                                {item.updatedBy ? ` oleh ${item.updatedBy}` : ""}
+                              </span>
+                            </div>
+                          </div>
+
+                          {productNote && (
+                            <div className="mt-4 flex items-start gap-2 rounded-2xl bg-blue-500/15 p-3 text-xs font-bold leading-6 text-blue-200 sm:p-4">
+                              <MdInfo className="mt-1 shrink-0" />
+                              <span>{productNote}</span>
+                            </div>
+                          )}
+
+                          <div className="mt-4 hidden rounded-2xl bg-white/5 p-4 md:block">
+                            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+                              Catatan Admin
+                            </p>
+                            <p className="mt-2 text-sm leading-6 text-slate-300">
+                              {item.note && item.note !== "-"
+                                ? item.note
+                                : "Tidak ada catatan dari admin."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="w-full max-w-full shrink-0 lg:w-72">
+                          <div className="rounded-3xl bg-[#f7f0e6] p-4 text-[#06251c] sm:p-5">
+                            <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                              Ubah Ketersediaan
+                            </label>
+
+                            <div className="mt-2 text-sm font-bold md:hidden">
+                              {getStockBadgeLabel(stockStatus)}
+                            </div>
+
+                            <div className="mt-2 hidden text-sm font-bold md:block">
+                              Status saat ini:{" "}
+                              <span
+                                className={
+                                  stockStatus === "Tersedia"
+                                    ? "text-emerald-700"
+                                    : "text-red-600"
+                                }
+                              >
+                                {stockStatus}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStockStatus(item)}
+                              className={`mt-4 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-black text-white transition-all duration-300 ${
+                                stockStatus === "Tersedia"
+                                  ? "bg-red-600 hover:bg-red-700"
+                                  : "bg-emerald-600 hover:bg-emerald-700"
+                              }`}
+                            >
+                              {stockStatus === "Tersedia"
+                                ? "❌ Tidak Tersedia"
+                                : "✅ Tersedia"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            
+            {riderInventory.length > 0 && (
+              <div className="mt-6">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  variant="dark"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </RiderLayout>
   );
 }

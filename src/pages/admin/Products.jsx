@@ -9,145 +9,14 @@ import {
   MdSearch,
   MdStorefront,
   MdWarningAmber,
+  MdCheckCircle,
+  MdCancel,
 } from "react-icons/md";
-
-const MENU_DATA_VERSION = "saka-menu-admin-final-v2";
-
-const defaultMenus = [
-  {
-    id: 1,
-    name: "Kopi Susu Aren",
-    category: "Cup Series",
-    cupPrice: 12000,
-    price500: 0,
-    price1L: 0,
-    description:
-      "Kopi susu aren khas Saka dengan rasa creamy, manis, dan cocok untuk diminum santai.",
-    image: "/img/kopisusuaren.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 2,
-    name: "Es Kopi Susu",
-    category: "Cup Series",
-    cupPrice: 10000,
-    price500: 0,
-    price1L: 0,
-    description:
-      "Es kopi susu klasik dengan rasa ringan, segar, dan cocok untuk diminum harian.",
-    image: "/img/kopisusu.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 3,
-    name: "Coklat Susu Aren",
-    category: "Cup Series",
-    cupPrice: 12000,
-    price500: 0,
-    price1L: 0,
-    description:
-      "Minuman coklat susu aren dengan rasa manis, lembut, dan creamy untuk pelanggan non coffee.",
-    image: "/img/coklatsusuaren.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 4,
-    name: "Pinky Milky",
-    category: "Cup Series",
-    cupPrice: 10000,
-    price500: 0,
-    price1L: 0,
-    description:
-      "Minuman susu manis berwarna pink dengan rasa lembut, segar, dan cocok untuk pelanggan yang tidak minum kopi.",
-    image: "/img/pinkymilky.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 5,
-    name: "Creamy Butterscotch",
-    category: "Cup Series",
-    cupPrice: 13000,
-    price500: 0,
-    price1L: 0,
-    description:
-      "Minuman creamy dengan rasa butterscotch yang manis, lembut, dan terasa premium.",
-    image: "img/butterscotch.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 6,
-    name: "Kopi Susu Aren Literan",
-    category: "Literan",
-    cupPrice: 0,
-    price500: 36000,
-    price1L: 70000,
-    description:
-      "Kopi susu aren dalam kemasan botol 500ml dan 1 liter. Cocok untuk stok minuman di rumah, kantor, atau acara kecil.",
-    image: "/img/kopisusuaren1L.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 7,
-    name: "Es Kopi Susu Literan",
-    category: "Literan",
-    cupPrice: 0,
-    price500: 33000,
-    price1L: 65000,
-    description:
-      "Es kopi susu dalam kemasan botol 500ml dan 1 liter dengan rasa ringan dan segar.",
-    image: "/img/kopisusu1L.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 8,
-    name: "Coklat Susu Aren Literan",
-    category: "Literan",
-    cupPrice: 0,
-    price500: 36000,
-    price1L: 70000,
-    description:
-      "Coklat susu aren dalam kemasan botol 500ml dan 1 liter. Cocok untuk pelanggan yang ingin minuman non coffee ukuran besar.",
-    image: "/img/coklatsusuaren1L.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 9,
-    name: "Pinky Milky Literan",
-    category: "Literan",
-    cupPrice: 0,
-    price500: 33000,
-    price1L: 65000,
-    description:
-      "Pinky Milky dalam kemasan botol 500ml dan 1 liter. Rasanya manis, lembut, dan cocok untuk pelanggan non coffee.",
-    image: "/img/pinkmilky1L.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 10,
-    name: "Creamy Butterscotch Literan",
-    category: "Literan",
-    cupPrice: 0,
-    price500: 39000,
-    price1L: 78000,
-    description:
-      "Creamy Butterscotch dalam kemasan botol 500ml dan 1 liter dengan rasa manis, creamy, dan premium.",
-    image: "/img/butterscotch1L.jpeg",
-    status: "Aktif",
-  },
-  {
-    id: 11,
-    name: "Donat",
-    category: "Snack",
-    cupPrice: 15000,
-    price500: 0,
-    price1L: 0,
-    description:
-      "Donat Saka sebagai menu pendamping minuman. Produk ini hanya tersedia di beberapa cabang tertentu.",
-    image: "/img/donat.jpeg",
-    status: "Aktif",
-  },
-];
-
+import api from "../../services/api";
+import { usePagination } from "../../hooks/usePagination";
+import Pagination from "../../components/Pagination";
+import StatCard from "../../components/StatCard";
+import ResponsiveGrid from "../../components/ResponsiveGrid";
 const emptyForm = {
   name: "",
   category: "Cup Series",
@@ -160,54 +29,15 @@ const emptyForm = {
 };
 
 export default function Products() {
-  const [menus, setMenus] = useState(() => {
-    const savedVersion = localStorage.getItem("saka_menus_version");
-
-    if (savedVersion !== MENU_DATA_VERSION) {
-      return defaultMenus;
-    }
-
-    const saved = localStorage.getItem("saka_menus");
-
-    if (!saved) return defaultMenus;
-
-    try {
-      const parsed = JSON.parse(saved);
-
-      return parsed.map((item) => ({
-        id: item.id || Date.now(),
-        name: item.name || "",
-        category: item.category || "Cup Series",
-        cupPrice: item.cupPrice ?? "",
-        price500: item.price500 ?? "",
-        price1L: item.price1L ?? "",
-        description: item.description || "",
-        image: item.image || "",
-        status:
-          item.status === "Tersedia" || item.status === "Aktif"
-            ? "Aktif"
-            : item.status === "Habis" || item.status === "Tidak Tersedia"
-              ? "Nonaktif"
-              : item.status || "Aktif",
-      }));
-    } catch (error) {
-      localStorage.removeItem("saka_menus");
-      return defaultMenus;
-    }
-  });
-
+  const [menus, setMenus] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState({
     type: "",
     text: "",
   });
-
-  useEffect(() => {
-    localStorage.setItem("saka_menus", JSON.stringify(menus));
-    localStorage.setItem("saka_menus_version", MENU_DATA_VERSION);
-  }, [menus]);
 
   const showNotice = (type, text) => {
     setNotice({ type, text });
@@ -216,6 +46,70 @@ export default function Products() {
       setNotice({ type: "", text: "" });
     }, 3500);
   };
+
+  const getErrorMessage = (error, fallback) => {
+    const message = error?.response?.data?.message;
+    const errors = error?.response?.data?.errors;
+
+    if (message) return message;
+
+    if (errors) {
+      const firstError = Object.values(errors)[0];
+
+      if (Array.isArray(firstError)) {
+        return firstError[0];
+      }
+    }
+
+    return fallback;
+  };
+
+  const normalizeMenuFromApi = (item) => ({
+    id: item.id,
+    name: item.name || "",
+    category: item.category || "Cup Series",
+    cupPrice: item.cup_price ?? 0,
+    price500: item.price_500 ?? 0,
+    price1L: item.price_1l ?? 0,
+    description: item.description || "",
+    image: item.image || "",
+    status: item.status || "Aktif",
+  });
+
+  const createPayload = () => ({
+    name: form.name,
+    category: form.category,
+    cup_price: Number(form.cupPrice || 0),
+    price_500: Number(form.price500 || 0),
+    price_1l: Number(form.price1L || 0),
+    description: form.description || "Belum ada deskripsi.",
+    image: form.image,
+    status: form.status,
+  });
+
+  const fetchMenus = async () => {
+    try {
+      setLoading(true);
+
+      const response = await api.get("/admin/menus");
+
+      const data = response.data.data ?? [];
+
+      setMenus(data.map(normalizeMenuFromApi));
+
+    } catch (error) {
+      showNotice(
+        "error",
+        getErrorMessage(error, "Gagal mengambil data menu.")
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMenus();
+  }, []);
 
   const filteredMenus = menus.filter((menu) => {
     const keyword = search.toLowerCase();
@@ -228,9 +122,35 @@ export default function Products() {
     );
   });
 
+  const categoryOrder = {
+    "Cup Series": 1,
+    Literan: 2,
+    Snack: 3,
+  };
+
+  const sortedMenus = [...filteredMenus].sort((a, b) => {
+    const orderA = categoryOrder[a.category] || 99;
+    const orderB = categoryOrder[b.category] || 99;
+
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+
+    return a.id - b.id;
+  });
+
+  const {
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    currentData: paginatedMenus,
+  } = usePagination(sortedMenus, 5);
+
   const totalMenu = menus.length;
   const activeMenu = menus.filter((menu) => menu.status === "Aktif").length;
-  const nonActiveMenu = menus.filter((menu) => menu.status === "Nonaktif").length;
+  const nonActiveMenu = menus.filter(
+    (menu) => menu.status === "Nonaktif"
+  ).length;
 
   const totalCategory = useMemo(() => {
     const categories = menus.map((menu) => menu.category);
@@ -261,16 +181,15 @@ export default function Products() {
 
     if (!file) return;
 
-    const reader = new FileReader();
+    setForm((prev) => ({
+      ...prev,
+      image: `/img/${file.name}`,
+    }));
 
-    reader.onloadend = () => {
-      setForm((prev) => ({
-        ...prev,
-        image: reader.result,
-      }));
-    };
-
-    reader.readAsDataURL(file);
+    showNotice(
+      "info",
+      "Nama file gambar berhasil dimasukkan. Pastikan file gambar ada di folder public/img."
+    );
   };
 
   const resetForm = () => {
@@ -292,48 +211,33 @@ export default function Products() {
     return true;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!validateForm()) return;
 
-    const menuData = {
-      name: form.name,
-      category: form.category,
-      cupPrice: Number(form.cupPrice || 0),
-      price500: Number(form.price500 || 0),
-      price1L: Number(form.price1L || 0),
-      description: form.description || "Belum ada deskripsi.",
-      image: form.image,
-      status: form.status,
-    };
+    try {
+      const payload = createPayload();
 
-    if (editId) {
-      setMenus((prev) =>
-        prev.map((menu) =>
-          menu.id === editId
-            ? {
-              ...menu,
-              ...menuData,
-            }
-            : menu
-        )
+      if (editId) {
+        await api.put(`/admin/menus/${editId}`, payload);
+
+        showNotice("success", "Data menu berhasil diperbarui.");
+      } else {
+        await api.post("/admin/menus", payload);
+
+        showNotice("success", "Menu berhasil ditambahkan.");
+      }
+
+      resetForm();
+      fetchMenus();
+
+    } catch (error) {
+      showNotice(
+        "error",
+        getErrorMessage(error, "Gagal menyimpan menu.")
       );
-
-      showNotice("success", "Data menu berhasil diperbarui.");
-    } else {
-      setMenus((prev) => [
-        {
-          id: Date.now(),
-          ...menuData,
-        },
-        ...prev,
-      ]);
-
-      showNotice("success", "Menu baru berhasil ditambahkan.");
     }
-
-    resetForm();
   };
 
   const handleEdit = (menu) => {
@@ -353,22 +257,35 @@ export default function Products() {
     showNotice("info", "Mode edit aktif. Ubah data yang diperlukan lalu simpan.");
   };
 
-  const handleDelete = (id) => {
-    setMenus((prev) => prev.filter((menu) => menu.id !== id));
+  const handleDelete = async (id) => {
+  if (!window.confirm("Yakin ingin menghapus menu ini?")) return;
+
+  try {
+    await api.delete(`/admin/menus/${id}`);
+
     showNotice("success", "Menu berhasil dihapus.");
-  };
+
+    fetchMenus();
+
+  } catch (error) {
+    showNotice(
+      "error",
+      getErrorMessage(error, "Gagal menghapus menu.")
+    );
+  }
+};
 
   const renderPriceCards = (menu) => {
-  const isSnack = menu.category === "Snack";
+    const isSnack = menu.category === "Snack";
 
-  const prices = isSnack
-    ? [
+    const prices = isSnack
+      ? [
         {
           label: "Harga",
           value: menu.cupPrice,
         },
       ].filter((item) => Number(item.value) > 0)
-    : [
+      : [
         {
           label: "Cup",
           value: menu.cupPrice,
@@ -383,28 +300,28 @@ export default function Products() {
         },
       ].filter((item) => Number(item.value) > 0);
 
-  if (prices.length === 0) {
-    return (
-      <div className="rounded-2xl bg-white/10 p-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-          Harga
-        </p>
-        <p className="mt-1 text-sm font-black text-white">Belum diisi</p>
-      </div>
-    );
-  }
+    if (prices.length === 0) {
+      return (
+        <div className="rounded-2xl bg-white/10 p-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+            Harga
+          </p>
+          <p className="mt-1 text-sm font-black text-white">Belum diisi</p>
+        </div>
+      );
+    }
 
-  return prices.map((item) => (
-    <div key={item.label} className="rounded-2xl bg-white/10 p-3">
-      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
-        {item.label}
-      </p>
-      <p className="mt-1 text-sm font-black text-white">
-        {formatRupiah(item.value)}
-      </p>
-    </div>
-  ));
-};
+    return prices.map((item) => (
+      <div key={item.label} className="rounded-2xl bg-white/10 p-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+          {item.label}
+        </p>
+        <p className="mt-1 text-sm font-black text-white">
+          {formatRupiah(item.value)}
+        </p>
+      </div>
+    ));
+  };
 
   const renderSpecialNote = (menu) => {
     if (menu.category === "Literan") {
@@ -418,7 +335,8 @@ export default function Products() {
     if ((menu.name || "").toLowerCase().includes("donat")) {
       return (
         <div className="mt-4 rounded-2xl bg-yellow-500/15 p-4 text-xs font-bold leading-6 text-yellow-200">
-          Donat hanya tersedia Outlet utama, cabang nagasakti, cabang rumbai, dan cabang hang tuah ujung.
+          Donat saat ini tersedia di Cabang Stadion / Nagasakti, Cabang Rumbai,
+          dan Cabang Hang Tuah Ujung.
         </div>
       );
     }
@@ -445,34 +363,36 @@ export default function Products() {
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <div className="saka-card bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Total Menu
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{totalMenu}</h2>
-        </div>
+      <div className="mb-6">
+        <ResponsiveGrid>
+          <StatCard
+            icon={<div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg bg-[#e7ddd0] text-[#06251c]"><MdRestaurantMenu /></div>}
+            label="Total Menu"
+            value={totalMenu}
+            className="bg-white text-[#06251c]"
+          />
 
-        <div className="saka-card bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Menu Aktif
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{activeMenu}</h2>
-        </div>
+          <StatCard
+            icon={<div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg bg-[#cce6dd] text-[#607f75]"><MdCheckCircle /></div>}
+            label="Menu Aktif"
+            value={activeMenu}
+            className="bg-white text-[#06251c]"
+          />
 
-        <div className="saka-card bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Kategori
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{totalCategory}</h2>
-        </div>
+          <StatCard
+            icon={<div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg bg-[#e5eeee] text-[#607f75]"><MdInfo /></div>}
+            label="Kategori"
+            value={totalCategory}
+            className="bg-white text-[#06251c]"
+          />
 
-        <div className="saka-card bg-white p-6 text-[#06251c]">
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-            Nonaktif
-          </p>
-          <h2 className="mt-3 text-4xl font-black">{nonActiveMenu}</h2>
-        </div>
+          <StatCard
+            icon={<div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg bg-red-100 text-red-600"><MdCancel /></div>}
+            label="Nonaktif"
+            value={nonActiveMenu}
+            className="bg-white text-[#06251c]"
+          />
+        </ResponsiveGrid>
       </div>
 
       <div className="mb-6 rounded-3xl bg-[#f7f0e6] p-6 text-[#06251c]">
@@ -488,14 +408,13 @@ export default function Products() {
               sebaiknya langsung diminum setelah dibeli. Untuk produk botol 500ml
               dan 1 liter, simpan di kulkas/chiller dan sebaiknya habiskan dalam
               1-2 hari. Jika disimpan di freezer, perkiraan daya tahan 2-3 hari.
-              Jangan simpan produk terlalu lama di suhu ruang. Jika pelanggan
-              masih bingung, arahkan untuk bertanya lewat WhatsApp Saka.
+              Jangan simpan produk terlalu lama di suhu ruang.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
         <div className="saka-panel bg-[#f7f0e6] p-7 text-[#06251c]">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#06251c] text-white">
@@ -515,10 +434,10 @@ export default function Products() {
           {notice.text && (
             <div
               className={`mb-5 flex items-start gap-2 rounded-2xl px-4 py-3 text-xs font-bold leading-6 ${notice.type === "success"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : notice.type === "info"
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-red-100 text-red-700"
+                ? "bg-emerald-100 text-emerald-700"
+                : notice.type === "info"
+                  ? "bg-blue-100 text-blue-700"
+                  : "bg-red-100 text-red-700"
                 }`}
             >
               <MdWarningAmber className="mt-1 shrink-0" />
@@ -625,9 +544,18 @@ export default function Products() {
                 Foto Produk
               </label>
 
+              <input
+                type="text"
+                name="image"
+                value={form.image}
+                onChange={handleChange}
+                placeholder="/img/kopisusuaren.jpeg"
+                className="mb-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#06251c]"
+              />
+
               <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm font-bold text-slate-500 transition hover:border-[#06251c] hover:text-[#06251c]">
                 <MdImage className="text-xl" />
-                Upload Foto Produk
+                Pilih Nama File dari Komputer
                 <input
                   type="file"
                   accept="image/*"
@@ -642,6 +570,9 @@ export default function Products() {
                     src={form.image}
                     alt="Preview produk"
                     className="h-36 w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 </div>
               )}
@@ -691,7 +622,7 @@ export default function Products() {
             <div>
               <h2 className="text-xl font-black">Daftar Menu Kopi Saka</h2>
               <p className="mt-1 text-xs text-slate-300">
-                Data master menu ini akan digunakan untuk tampilan pelanggan.
+                Data master menu ini diambil dari backend Laravel.
               </p>
             </div>
 
@@ -708,12 +639,16 @@ export default function Products() {
           </div>
 
           <div className="space-y-4">
-            {filteredMenus.length === 0 ? (
+            {loading ? (
+              <div className="rounded-3xl bg-white/5 p-8 text-center text-sm text-slate-400">
+                Mengambil data menu dari backend...
+              </div>
+            ) : sortedMenus.length === 0 ? (
               <div className="rounded-3xl bg-white/5 p-8 text-center text-sm text-slate-400">
                 Data menu tidak ditemukan.
               </div>
             ) : (
-              filteredMenus.map((menu) => (
+              paginatedMenus.map((menu) => (
                 <div
                   key={menu.id}
                   className="rounded-3xl bg-white/5 p-5 transition hover:bg-white/10"
@@ -743,8 +678,8 @@ export default function Products() {
 
                             <span
                               className={`rounded-full px-3 py-1 text-[11px] font-black ${menu.status === "Aktif"
-                                  ? "bg-emerald-500/20 text-emerald-300"
-                                  : "bg-red-500/20 text-red-300"
+                                ? "bg-emerald-500/20 text-emerald-300"
+                                : "bg-red-500/20 text-red-300"
                                 }`}
                             >
                               {menu.status}
@@ -790,6 +725,14 @@ export default function Products() {
               ))
             )}
           </div>
+
+          {sortedMenus.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          )}
 
           <div className="mt-6 rounded-3xl bg-white/5 p-5">
             <h3 className="text-sm font-black text-white">Catatan Konsep</h3>
