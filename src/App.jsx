@@ -9,7 +9,7 @@ import AdminProtectedRoute from "./components/AdminProtectedRoute";
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
 
-import NotFound from "./pages/NotFound";
+import NotFound from "./pages/NotFoundTemp";
 
 const Login = React.lazy(() => import("./pages/Auth/Login"));
 const Forgot = React.lazy(() => import("./pages/Auth/Forgot"));
