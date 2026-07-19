@@ -97,7 +97,7 @@ export default function Forgot() {
           <div className="saka-panel bg-[#f7f0e6] p-8 text-[#06251c] md:p-10">
             <button
               type="button"
-              onClick={() => navigate("/login")}
+              onClick={() => navigate("/admin/login")}
               className="mb-7 flex items-center gap-2 rounded-full bg-[#06251c]/10 px-4 py-2 text-xs font-black text-[#06251c] transition hover:bg-[#06251c] hover:text-white"
             >
               <MdArrowBack />

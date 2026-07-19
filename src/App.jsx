@@ -5,6 +5,7 @@ import "./assets/tailwind.css";
 
 import Loading from "./components/Loading";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
+import RiderProtectedRoute from "./components/RiderProtectedRoute";
 
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
@@ -13,6 +14,7 @@ import NotFound from "./pages/NotFound";
 
 const Login = React.lazy(() => import("./pages/Auth/Login"));
 const Forgot = React.lazy(() => import("./pages/Auth/Forgot"));
+const RiderLogin = React.lazy(() => import("./pages/Auth/RiderLogin"));
 
 const AdminDashboard = React.lazy(() => import("./pages/AdminDashboard"));
 const Riders = React.lazy(() => import("./pages/admin/Riders"));
@@ -30,32 +32,46 @@ function App() {
   return (
     <Suspense fallback={<Loading />}>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* Landing Page */}
+        <Route path="/" element={<CustomerPage />} />
 
+        {/* Admin Auth */}
         <Route element={<AuthLayout />}>
-          <Route path="/login" element={<Login />} />
-          <Route path="/forgot" element={<Forgot />} />
+          <Route path="/admin/login" element={<Login />} />
+          <Route path="/admin/forgot" element={<Forgot />} />
         </Route>
 
+        {/* Rider Auth */}
+        <Route path="/rider/login" element={<RiderLogin />} />
+
+        {/* Admin Panel */}
         <Route element={<AdminProtectedRoute />}>
           <Route element={<MainLayout />}>
             <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/riders" element={<Riders />} />
-            <Route path="/menu-harga" element={<Products />} />
-            <Route path="/lokasi" element={<Locations />} />
-            <Route path="/keluhan" element={<Feedback />} />
-            <Route path="/monitoring-stok" element={<MonitoringStok />} />
-            <Route path="/manajemen-literan" element={<ManajemenLiteran />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/admin/riders" element={<Riders />} />
+            <Route path="/admin/products" element={<Products />} />
+            <Route path="/admin/locations" element={<Locations />} />
+            <Route path="/admin/feedback" element={<Feedback />} />
+            <Route path="/admin/stocks" element={<MonitoringStok />} />
+            <Route path="/admin/literan" element={<ManajemenLiteran />} />
+            <Route path="/admin/settings" element={<Settings />} />
           </Route>
         </Route>
 
-        <Route path="/rider-login" element={<Navigate to="/rider" replace />} />
-        <Route path="/rider-dashboard" element={<Navigate to="/rider" replace />} />
-        <Route path="/rider" element={<RiderDashboard />} />
+        {/* Rider Panel */}
+        <Route element={<RiderProtectedRoute />}>
+          <Route path="/rider/dashboard" element={<RiderDashboard />} />
+        </Route>
 
-        <Route path="/pelanggan" element={<CustomerPage />} />
+        {/* Redirect old routes to prevent broken bookmarks/history */}
+        <Route path="/login" element={<Navigate to="/admin/login" replace />} />
+        <Route path="/forgot" element={<Navigate to="/admin/forgot" replace />} />
+        <Route path="/rider" element={<Navigate to="/rider/dashboard" replace />} />
+        <Route path="/rider-login" element={<Navigate to="/rider/login" replace />} />
+        <Route path="/rider-dashboard" element={<Navigate to="/rider/dashboard" replace />} />
+        <Route path="/pelanggan" element={<Navigate to="/" replace />} />
 
+        {/* Wildcard NotFound */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

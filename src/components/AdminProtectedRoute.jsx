@@ -4,7 +4,7 @@ export default function AdminProtectedRoute() {
   const session = localStorage.getItem("saka_admin_session");
 
   if (!session) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/admin/login" replace />;
   }
 
   try {
@@ -15,12 +15,12 @@ export default function AdminProtectedRoute() {
 
     if (!isAdminLoggedIn) {
       localStorage.removeItem("saka_admin_session");
-      return <Navigate to="/login" replace />;
+      return <Navigate to="/admin/login" replace />;
     }
 
     return <Outlet />;
   } catch (error) {
     localStorage.removeItem("saka_admin_session");
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/admin/login" replace />;
   }
-}
+}

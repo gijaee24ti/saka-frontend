@@ -50,25 +50,25 @@ export default function Sidebar({ onNavigate }) {
             </NavLink>
           </li>
           <li>
-            <NavLink to="/riders" className={menuClass} onClick={handleNav}>
+            <NavLink to="/admin/riders" className={menuClass} onClick={handleNav}>
               <MdLocalShipping className="text-xl shrink-0" />
               <span>Rider</span>
             </NavLink>
           </li>
           <li>
-            <NavLink to="/menu-harga" className={menuClass} onClick={handleNav}>
+            <NavLink to="/admin/products" className={menuClass} onClick={handleNav}>
               <MdRestaurantMenu className="text-xl shrink-0" />
               <span>Menu & Harga</span>
             </NavLink>
           </li>
           <li>
-            <NavLink to="/lokasi" className={menuClass} onClick={handleNav}>
+            <NavLink to="/admin/locations" className={menuClass} onClick={handleNav}>
               <MdLocationOn className="text-xl shrink-0" />
               <span>Lokasi</span>
             </NavLink>
           </li>
           <li>
-            <NavLink to="/keluhan" className={menuClass} onClick={handleNav}>
+            <NavLink to="/admin/feedback" className={menuClass} onClick={handleNav}>
               <MdFeedback className="text-xl shrink-0" />
               <span>Keluhan</span>
             </NavLink>
@@ -83,13 +83,13 @@ export default function Sidebar({ onNavigate }) {
         </p>
         <ul className="space-y-1">
           <li>
-            <NavLink to="/monitoring-stok" className={menuClass} onClick={handleNav}>
+            <NavLink to="/admin/stocks" className={menuClass} onClick={handleNav}>
               <MdInventory className="text-xl shrink-0" />
               <span>Monitoring Stok</span>
             </NavLink>
           </li>
           <li>
-            <NavLink to="/manajemen-literan" className={menuClass} onClick={handleNav}>
+            <NavLink to="/admin/literan" className={menuClass} onClick={handleNav}>
               <MdStorefront className="text-xl shrink-0" />
               <span>Kelola Produk Literan</span>
             </NavLink>
@@ -101,7 +101,7 @@ export default function Sidebar({ onNavigate }) {
 
         <ul className="space-y-1">
           <li>
-            <NavLink to="/settings" className={menuClass} onClick={handleNav}>
+            <NavLink to="/admin/settings" className={menuClass} onClick={handleNav}>
               <MdStorefront className="text-xl shrink-0" />
               <span>Outlet Utama</span>
             </NavLink>

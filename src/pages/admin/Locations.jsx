@@ -317,7 +317,7 @@ export default function Locations() {
             </div>
 
             <Link
-              to="/settings"
+              to="/admin/settings"
               className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full bg-[#f8efe1] px-5 py-3 text-sm font-black text-[#06251c] transition hover:bg-white"
             >
               Kelola Outlet Utama

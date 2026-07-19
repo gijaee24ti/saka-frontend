@@ -18,7 +18,7 @@ export default function MainLayout() {
     }
     localStorage.removeItem("saka_admin_session");
     localStorage.removeItem("saka_auth_session");
-    navigate("/login", { replace: true });
+    navigate("/admin/login", { replace: true });
   };
 
   // Close sidebar on route change via resize/escape

@@ -206,7 +206,7 @@ export default function Login() {
               <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={() => navigate("/forgot")}
+                  onClick={() => navigate("/admin/forgot")}
                   className="text-sm font-bold text-emerald-700 hover:text-emerald-900"
                 >
                   Lupa kata sandi?

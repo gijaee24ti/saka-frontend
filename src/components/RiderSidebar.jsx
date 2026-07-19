@@ -46,7 +46,7 @@ export default function RiderSidebar({
         </p>
         <ul className="space-y-1">
           <li>
-            <NavLink to="/rider" end className={menuClass} onClick={handleNav}>
+            <NavLink to="/rider/dashboard" end className={menuClass} onClick={handleNav}>
               <MdDashboard className="shrink-0 text-xl" />
               <span>Dashboard</span>
             </NavLink>
