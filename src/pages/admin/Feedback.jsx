@@ -13,6 +13,7 @@ import { usePagination } from "../../hooks/usePagination";
 import Pagination from "../../components/Pagination";
 import StatCard from "../../components/StatCard";
 import ResponsiveGrid from "../../components/ResponsiveGrid";
+import { showAlert, showToast } from "../../utils/notification";
 export default function Feedback() {
   const [feedback, setfeedback] = useState([]);
   const [search, setSearch] = useState("");
@@ -36,11 +37,6 @@ export default function Feedback() {
     return fallback;
   };
 
-  const toArray = (response) => {
-    if (Array.isArray(response?.data)) return response.data;
-    if (Array.isArray(response?.data?.data)) return response.data.data;
-    return [];
-  };
 
   const formatDate = (value) => {
     if (!value) return "-";
@@ -66,12 +62,12 @@ export default function Feedback() {
   try {
     setLoading(true);
 
-    const response = await api.get("/admin/feedback");
+    const response = await api.get("/admin/feedback?all=1");
     const data = response.data.data ?? response.data;
     setfeedback(data.map(normalizefeedbackFromApi));
 
   } catch (error) {
-    alert(getErrorMessage(error, "Gagal mengambil data feedback."));
+    showAlert.error(getErrorMessage(error, "Gagal mengambil data feedback."));
   } finally {
     setLoading(false);
   }
@@ -132,15 +128,15 @@ export default function Feedback() {
 
     await api.put(`/admin/feedback/${id}`,payload);
 
-    fetchfeedback();
-
+     fetchfeedback();
+     showToast.success("Status feedback berhasil diperbarui.");
 } catch(error){
-      alert(getErrorMessage(error, "Gagal mengubah status feedback."));
+      showAlert.error(getErrorMessage(error, "Gagal mengubah status feedback."));
     }
   };
 
   const handleDelete = async (id) => {
-    const confirmDelete = confirm("Yakin mau hapus review/keluhan ini?");
+    const confirmDelete = await showAlert.confirm("Apakah Anda yakin ingin menghapus review/keluhan ini?", "Konfirmasi Hapus");
 
     if (!confirmDelete) return;
 
@@ -149,8 +145,9 @@ export default function Feedback() {
       fetchfeedback();
 
       setfeedback((prev) => prev.filter((item) => item.id !== id));
+      showToast.success("Feedback berhasil dihapus.");
     } catch (error) {
-      alert(getErrorMessage(error, "Gagal menghapus feedback."));
+      showAlert.error(getErrorMessage(error, "Gagal menghapus feedback."));
     }
   };
 

@@ -14,6 +14,7 @@ import { usePagination } from "../../hooks/usePagination";
 import Pagination from "../../components/Pagination";
 import StatCard from "../../components/StatCard";
 import ResponsiveGrid from "../../components/ResponsiveGrid";
+import { showAlert, showToast } from "../../utils/notification";
 const createUsername = (name = "") => {
   return name
     .toLowerCase()
@@ -85,7 +86,7 @@ export default function Riders() {
     try {
       setLoading(true);
 
-      const response = await api.get("/admin/riders");
+      const response = await api.get("/admin/riders?all=1");
 
       const data = Array.isArray(response.data)
         ? response.data
@@ -93,7 +94,7 @@ export default function Riders() {
 
       setRiders(data.map(normalizeRiderFromApi));
     } catch (error) {
-      alert(getErrorMessage(error, "Gagal mengambil data rider dari backend."));
+      showAlert.error(getErrorMessage(error, "Gagal mengambil data rider dari backend."));
     } finally {
       setLoading(false);
     }
@@ -109,7 +110,7 @@ export default function Riders() {
 
       setLocations(data.map(normalizeOutletFromApi));
     } catch (error) {
-      alert(getErrorMessage(error, "Gagal mengambil data outlet."));
+      showAlert.error(getErrorMessage(error, "Gagal mengambil data outlet."));
     }
   };
 
@@ -189,7 +190,7 @@ export default function Riders() {
 
   const validateForm = () => {
     if (!form.name || !form.phone) {
-      alert("Nama rider dan No HP wajib diisi!");
+      showAlert.warning("Nama rider dan No HP wajib diisi!", "Data Belum Lengkap");
       return false;
     }
 
@@ -239,16 +240,16 @@ export default function Riders() {
 
       if (editId) {
         await api.put(`/admin/riders/${editId}`, payload);
-        alert("Data rider berhasil diperbarui.");
+        showToast.success("Data rider berhasil diperbarui.");
       } else {
         await api.post("/admin/riders", payload);
-        alert("Rider baru berhasil ditambahkan.");
+        showToast.success("Rider baru berhasil ditambahkan.");
       }
 
       resetForm();
       fetchRiders();
     } catch (error) {
-      alert(getErrorMessage(error, "Gagal menyimpan data rider."));
+      showAlert.error(getErrorMessage(error, "Gagal menyimpan data rider."));
     }
   };
 
@@ -266,16 +267,16 @@ export default function Riders() {
   };
 
   const handleDelete = async (id) => {
-    const confirmDelete = confirm("Yakin mau hapus data rider ini?");
+    const confirmDelete = await showAlert.confirm("Yakin mau hapus data rider ini?", "Konfirmasi Hapus");
 
     if (!confirmDelete) return;
 
     try {
       await api.delete(`/admin/riders/${id}`);
-      alert("Data rider berhasil dihapus.");
+      showToast.success("Data rider berhasil dihapus.");
       fetchRiders();
     } catch (error) {
-      alert(getErrorMessage(error, "Gagal menghapus data rider."));
+      showAlert.error(getErrorMessage(error, "Gagal menghapus data rider."));
     }
   };
 

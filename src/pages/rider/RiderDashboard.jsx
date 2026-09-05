@@ -18,6 +18,8 @@ import RiderLayout from "../../layouts/RiderLayout";
 import { usePagination } from "../../hooks/usePagination";
 import Pagination from "../../components/Pagination";
 
+import { formatMapsLink } from "../../utils/outletUtama";
+
 const operationalOptions = [
   {
     label: "Buka",
@@ -179,7 +181,7 @@ export default function RiderDashboard() {
     closeTime: formatTime(item.close_time),
     status: item.status || "Tidak Beroperasi",
     address: item.address || "",
-    mapsLink: item.maps_link || "",
+    mapsLink: formatMapsLink(item.maps_link || item.mapsLink || ""),
     note: item.note || "",
   });
 
@@ -244,6 +246,7 @@ export default function RiderDashboard() {
         menu?.name ||
         "",
       category: menu?.category || "",
+      quantity: item.quantity ?? 0,
       stockStatus: item.stock_status || item.stockStatus || "Tersedia",
       updatedAtRaw:
         item.updated_time ||
@@ -801,9 +804,14 @@ export default function RiderDashboard() {
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <h3 className="break-words text-base font-black text-white sm:text-lg">
-                                {item.productName || "Produk"}
-                              </h3>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="break-words text-base font-black text-white sm:text-lg">
+                                  {item.productName || "Produk"}
+                                </h3>
+                                <span className="rounded-full bg-emerald-500/20 border border-emerald-400/30 px-2.5 py-0.5 text-xs font-black text-emerald-200">
+                                  Stok: {item.quantity}
+                                </span>
+                              </div>
                               <p className="mt-1 text-xs text-slate-400">
                                 {item.branch || currentRider.stand}
                               </p>

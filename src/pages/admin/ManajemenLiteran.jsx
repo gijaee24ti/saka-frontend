@@ -3,7 +3,6 @@ import {
   MdCheckCircle,
   MdCancel,
   MdSearch,
-  MdSave,
   MdWarningAmber,
   MdStorefront,
   MdRefresh,
@@ -24,7 +23,6 @@ export default function ManajemenLiteran() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState({ type: "", text: "" });
-  const [editingNotes, setEditingNotes] = useState({});
 
   const showNotice = (type, text) => {
     setNotice({ type, text });
@@ -47,7 +45,7 @@ export default function ManajemenLiteran() {
     try {
       setLoading(true);
       const [menuRes, stockRes, outletRes] = await Promise.all([
-        api.get("/admin/menus"),
+        api.get("/admin/menus?all=1"),
         api.get("/public/stocks"),
         api.get("/public/outlets"),
       ]);
@@ -62,13 +60,6 @@ export default function ManajemenLiteran() {
       setMenus(literanMenus);
       setStocks(allStocks);
       setOutlets(allOutlets);
-
-      const notes = {};
-      literanMenus.forEach((m) => {
-        const stock = allStocks.find((s) => s.menu_id === m.id || s.menu?.id === m.id);
-        notes[m.id] = stock?.note || "";
-      });
-      setEditingNotes(notes);
     } catch (error) {
       showNotice("error", getErrorMessage(error, "Gagal mengambil data produk literan."));
     } finally {
@@ -108,7 +99,6 @@ export default function ManajemenLiteran() {
         menu_id: menuId,
         rider_id: null,
         stock_status: nextStatus,
-        note: editingNotes[menuId] || "",
       };
       if (existing) await api.put(`/admin/stocks/${existing.id}`, payload);
       else await api.post("/admin/stocks", payload);
@@ -116,27 +106,6 @@ export default function ManajemenLiteran() {
       fetchData();
     } catch (error) {
       showNotice("error", getErrorMessage(error, "Gagal mengubah status."));
-    }
-  };
-
-  const handleSaveNote = async (menuId) => {
-    if (!outletUtama) { showNotice("error", "Outlet utama tidak ditemukan."); return; }
-    const existing = stocks.find((s) => s.menu_id === menuId || s.menu?.id === menuId);
-    const currentStatus = existing?.stock_status || existing?.stockStatus || "Tersedia";
-    try {
-      const payload = {
-        outlet_id: outletUtama.id,
-        menu_id: menuId,
-        rider_id: null,
-        stock_status: currentStatus,
-        note: editingNotes[menuId] || "",
-      };
-      if (existing) await api.put(`/admin/stocks/${existing.id}`, payload);
-      else await api.post("/admin/stocks", payload);
-      showNotice("success", "Catatan berhasil disimpan.");
-      fetchData();
-    } catch (error) {
-      showNotice("error", getErrorMessage(error, "Gagal menyimpan catatan."));
     }
   };
 
@@ -293,31 +262,6 @@ export default function ManajemenLiteran() {
                 {menu.description && (
                   <p className="text-xs text-slate-400 leading-5">{menu.description}</p>
                 )}
-
-                {/* Note Input */}
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                    Catatan Stok
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={editingNotes[menu.id] ?? ""}
-                      onChange={(e) =>
-                        setEditingNotes((prev) => ({ ...prev, [menu.id]: e.target.value }))
-                      }
-                      placeholder="Stok terbatas, dl..."
-                      className="flex-1 rounded-xl bg-white/10 px-3 py-2 text-xs text-white outline-none focus:bg-white/15 placeholder:text-slate-600"
-                    />
-                    <button
-                      onClick={() => handleSaveNote(menu.id)}
-                      className="rounded-xl bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-500 transition flex items-center justify-center"
-                      title="Simpan Catatan"
-                    >
-                      <MdSave className="text-sm" />
-                    </button>
-                  </div>
-                </div>
 
                 {/* Last Updated */}
                 {lastUpdate && (

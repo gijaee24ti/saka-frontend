@@ -16,6 +16,7 @@ import {
 import api from "../../services/api";
 import {
   findOutletUtama,
+  formatMapsLink,
   getStatusBadge,
   normalizeOutletUtamaFromApi,
 } from "../../utils/outletUtama";
@@ -23,6 +24,7 @@ import { usePagination } from "../../hooks/usePagination";
 import Pagination from "../../components/Pagination";
 import StatCard from "../../components/StatCard";
 import ResponsiveGrid from "../../components/ResponsiveGrid";
+import { showAlert } from "../../utils/notification";
 
 const emptyForm = {
   branch: "",
@@ -81,7 +83,7 @@ export default function Locations() {
     openTime: formatTime(item.open_time),
     closeTime: formatTime(item.close_time),
     address: item.address && item.address !== "-" ? item.address : "",
-    mapsLink: item.maps_link || "",
+    mapsLink: formatMapsLink(item.maps_link || item.mapsLink || ""),
     status: item.status || "Tidak Beroperasi",
   });
 
@@ -89,7 +91,7 @@ export default function Locations() {
     try {
       setLoading(true);
 
-      const response = await api.get("/admin/outlets");
+      const response = await api.get("/admin/outlets?all=1");
       const data = response.data.data ?? response.data;
       setLocations(data.map(normalizeOutletFromApi));
     } catch (error) {
@@ -172,7 +174,7 @@ export default function Locations() {
       open_time: form.openTime,
       close_time: form.closeTime,
       address: form.address || "",
-      maps_link: form.mapsLink || "",
+      maps_link: formatMapsLink(form.mapsLink || ""),
       status: editId
         ? oldData?.status || "Tidak Beroperasi"
         : "Tidak Beroperasi",
@@ -224,7 +226,7 @@ export default function Locations() {
   };
 
   const handleDelete = async (id) => {
-    const confirmDelete = window.confirm("Yakin mau hapus data cabang ini?");
+    const confirmDelete = await showAlert.confirm("Yakin mau hapus data cabang ini?", "Konfirmasi Hapus");
 
     if (!confirmDelete) return;
 
@@ -473,6 +475,12 @@ export default function Locations() {
                 name="mapsLink"
                 value={form.mapsLink}
                 onChange={handleChange}
+                onBlur={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    mapsLink: formatMapsLink(e.target.value),
+                  }))
+                }
                 placeholder="Opsional: tempel link Google Maps di sini"
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#06251c]"
               />

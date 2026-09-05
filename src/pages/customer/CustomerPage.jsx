@@ -17,6 +17,7 @@ import api from "../../services/api";
 import {
   enrichOutletWithMeta,
   findOutletUtama,
+  formatMapsLink,
   getStatusBadge,
   isOutletUtama,
   parseOutletNote,
@@ -27,19 +28,19 @@ const deliveryLinks = [
     id: 1,
     name: "ShopeeFood",
     logo: "/img/shopeefood.jpg",
-    link: "#",
+    link: "https://shopee.co.id/universal-link/now-food/shop/21604477?deep_and_deferred=1&shareChannel=copy_link",
   },
   {
     id: 2,
     name: "GrabFood",
     logo: "/img/grabfood.jpg",
-    link: "#",
+    link: "https://r.grab.com/g/6-20260904_123321_9EFF8767BC7149E98EF962B53CB635E8_MEXMPS-6-C7LGJ3UVT22VNE",
   },
   {
     id: 3,
     name: "GoFood",
     logo: "/img/gofood.jpg",
-    link: "#",
+    link: "https://gofood.link/a/QXLpecA",
   },
 ];
 
@@ -315,7 +316,7 @@ export default function CustomerPage() {
       closeTime: formatTime(location.close_time || location.closeTime),
       status: location.status || "Aktif",
       address: location.address || "",
-      mapsLink: location.maps_link || location.mapsLink || "",
+      mapsLink: formatMapsLink(location.maps_link || location.mapsLink || ""),
       note: location.note || "",
       whatsapp: meta.whatsapp || "",
       deskripsi: meta.deskripsi || "",
@@ -560,7 +561,7 @@ export default function CustomerPage() {
         <div className="flex h-full flex-col p-5">
           <h3 className="text-xl font-black line-clamp-1">{menu.name}</h3>
 
-          <p className="mt-2 flex-grow text-xs leading-5 text-slate-600 line-clamp-2">
+          <p className="mt-2 flex-grow text-xs leading-5 text-slate-600">
             {menu.description || "Belum ada deskripsi."}
           </p>
 
@@ -691,12 +692,14 @@ export default function CustomerPage() {
             </div>
 
             <h2 className="text-4xl font-black leading-tight md:text-5xl lg:text-7xl">
-              Kopi keliling, rasa fresh, dekat dari kamu.
+              Saka Coffe.
+              Everywhere.
+              Anytime.
             </h2>
 
             <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300 lg:mt-6 lg:text-base lg:leading-8">
               Cek menu, lokasi outlet, status operasional, dan ketersediaan
-              produk SAKA On The Road langsung dari satu halaman.
+              produk SAKA On The Road.
             </p>
 
             <div className="mt-8 grid max-w-xl grid-cols-3 gap-2 lg:mt-10 lg:gap-3">
@@ -864,7 +867,6 @@ export default function CustomerPage() {
                     <div>
                       <p className="text-lg font-black">{app.name}</p>
                       <p className="mt-1 text-xs font-bold text-slate-500">
-                        Link akan ditambahkan
                       </p>
                     </div>
                   </div>

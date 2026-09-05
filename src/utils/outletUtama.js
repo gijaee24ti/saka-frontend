@@ -69,6 +69,23 @@ export const mapStatusFromApi = (status) => {
   return "Tidak Beroperasi";
 };
 
+export const formatMapsLink = (url) => {
+  if (!url || typeof url !== "string") return "";
+  let link = url.trim();
+  if (!link || link === "-") return "";
+
+  const matchSrc = link.match(/src=["']([^"']+)["']/i);
+  if (matchSrc && matchSrc[1]) {
+    link = matchSrc[1];
+  }
+
+  if (!/^https?:\/\//i.test(link)) {
+    link = `https://${link}`;
+  }
+
+  return link;
+};
+
 export const normalizeOutletUtamaFromApi = (item) => {
   if (!item) {
     return { ...defaultOutletUtamaForm, id: null };
@@ -81,7 +98,7 @@ export const normalizeOutletUtamaFromApi = (item) => {
     branch: item.branch || defaultOutletUtamaForm.branch,
     vehicle: item.vehicle || OUTLET_UTAMA_VEHICLE,
     address: item.address && item.address !== "-" ? item.address : "",
-    mapsLink: item.maps_link || item.mapsLink || "",
+    mapsLink: formatMapsLink(item.maps_link || item.mapsLink || ""),
     openTime: formatTime(item.open_time || item.openTime) || defaultOutletUtamaForm.openTime,
     closeTime: formatTime(item.close_time || item.closeTime) || defaultOutletUtamaForm.closeTime,
     status: mapStatusFromApi(item.status),
@@ -98,7 +115,7 @@ export const buildOutletUtamaApiPayload = (form) => ({
   open_time: form.openTime,
   close_time: form.closeTime,
   address: form.address || "",
-  maps_link: form.mapsLink || "",
+  maps_link: formatMapsLink(form.mapsLink || ""),
   status: form.status === "Beroperasi" ? "Beroperasi" : "Tidak Beroperasi",
   note: buildOutletNote(form),
 });

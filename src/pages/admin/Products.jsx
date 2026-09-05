@@ -17,6 +17,7 @@ import { usePagination } from "../../hooks/usePagination";
 import Pagination from "../../components/Pagination";
 import StatCard from "../../components/StatCard";
 import ResponsiveGrid from "../../components/ResponsiveGrid";
+import { showAlert } from "../../utils/notification";
 const emptyForm = {
   name: "",
   category: "Cup Series",
@@ -91,7 +92,7 @@ export default function Products() {
     try {
       setLoading(true);
 
-      const response = await api.get("/admin/menus");
+      const response = await api.get("/admin/menus?all=1");
 
       const data = response.data.data ?? [];
 
@@ -258,7 +259,8 @@ export default function Products() {
   };
 
   const handleDelete = async (id) => {
-  if (!window.confirm("Yakin ingin menghapus menu ini?")) return;
+  const confirmDelete = await showAlert.confirm("Yakin ingin menghapus menu ini?", "Konfirmasi Hapus");
+  if (!confirmDelete) return;
 
   try {
     await api.delete(`/admin/menus/${id}`);

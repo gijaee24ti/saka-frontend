@@ -19,6 +19,8 @@ import { usePagination } from "../../hooks/usePagination";
 import Pagination from "../../components/Pagination";
 import StatCard from "../../components/StatCard";
 import ResponsiveGrid from "../../components/ResponsiveGrid";
+import { showAlert } from "../../utils/notification";
+import { formatMapsLink } from "../../utils/outletUtama";
 /* ─── Branch defaults (fallback jika API kosong) ─── */
 const defaultBranches = [
   { branch: "Outlet Saka", outletType: "Outlet" },
@@ -74,7 +76,7 @@ export default function MonitoringStok() {
   const [selectedBranchGroup, setSelectedBranchGroup] = useState(null);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [tempNoteText, setTempNoteText] = useState("");
-  const [newStockForm, setNewStockForm] = useState({ menuId: "", status: "Tersedia", note: "" });
+  const [newStockForm, setNewStockForm] = useState({ menuId: "", quantity: 20, status: "Tersedia", note: "" });
 
   /* ─── Helpers ─── */
   const showNotice = (type, text) => {
@@ -122,7 +124,7 @@ export default function MonitoringStok() {
     openTime: item.open_time || item.openTime || "",
     closeTime: item.close_time || item.closeTime || "",
     address: item.address || "",
-    mapsLink: item.maps_link || item.mapsLink || "",
+    mapsLink: formatMapsLink(item.maps_link || item.mapsLink || ""),
     note: item.note || "",
   });
 
@@ -162,6 +164,7 @@ export default function MonitoringStok() {
       outletType: item.outlet_type || item.outletType || outlet?.outletType || "",
       riderName: item.rider_name || item.riderName || rider?.name || "",
       productName: item.product_name || item.productName || menu?.name || "",
+      quantity: item.quantity ?? 0,
       stockStatus: item.stock_status || item.stockStatus || "Tersedia",
       updatedAt: formatDateTime(item.updated_at || item.updatedAt),
       note: item.note || "",
@@ -207,6 +210,7 @@ export default function MonitoringStok() {
         openTime: item.openTime || "",
         closeTime: item.closeTime || "",
         address: item.address || "",
+        mapsLink: item.mapsLink || "",
       }));
     }
     return defaultBranches;
@@ -238,6 +242,7 @@ export default function MonitoringStok() {
         openTime: bo.openTime || "",
         closeTime: bo.closeTime || "",
         address: bo.address || "",
+        mapsLink: bo.mapsLink || "",
         riderName: assignedRider?.name || "",
         riderPhone: assignedRider?.phone || "",
         riderOperational: assignedRider?.operationalStatus || "",
@@ -356,6 +361,7 @@ export default function MonitoringStok() {
         outlet_id: item.outletId,
         rider_id: item.riderId,
         menu_id: item.menuId,
+        quantity: item.quantity,
         stock_status: nextStatus,
         note: item.note,
       });
@@ -366,12 +372,31 @@ export default function MonitoringStok() {
     }
   };
 
+  const handleUpdateQuantity = async (item, newQuantity) => {
+    const qty = Math.max(0, parseInt(newQuantity, 10) || 0);
+    try {
+      await api.put(`/admin/stocks/${item.id}`, {
+        outlet_id: item.outletId,
+        rider_id: item.riderId,
+        menu_id: item.menuId,
+        quantity: qty,
+        stock_status: item.stockStatus,
+        note: item.note,
+      });
+      showNotice("success", `Stok ${item.productName} diubah menjadi ${qty}.`);
+      await fetchAllData();
+    } catch (error) {
+      showNotice("error", getErrorMessage(error, "Gagal memperbarui jumlah stok."));
+    }
+  };
+
   const handleSaveNote = async (item) => {
     try {
       await api.put(`/admin/stocks/${item.id}`, {
         outlet_id: item.outletId,
         rider_id: item.riderId,
         menu_id: item.menuId,
+        quantity: item.quantity,
         stock_status: item.stockStatus,
         note: tempNoteText,
       });
@@ -384,7 +409,8 @@ export default function MonitoringStok() {
   };
 
   const handleDeleteItem = async (item) => {
-    if (!confirm(`Hapus pemantauan ${item.productName}?`)) return;
+    const confirmDelete = await showAlert.confirm(`Hapus pemantauan ${item.productName}?`, "Konfirmasi Hapus");
+    if (!confirmDelete) return;
     try {
       await api.delete(`/admin/stocks/${item.id}`);
       showNotice("success", "Produk dihapus dari pemantauan.");
@@ -396,19 +422,18 @@ export default function MonitoringStok() {
 
   const unmonitoredProducts = useMemo(() => {
     if (!selectedBranchGroup) return [];
-    const monitored = selectedBranchGroup.items.map((i) => i.productName);
-    const dbNonLiteran = menus
-      .filter((m) => m.category !== "Literan" && !(m.name || "").toLowerCase().includes("literan"))
-      .map((m) => m.name);
-    const all = Array.from(new Set([...BASE_PRODUCTS, ...dbNonLiteran]));
-    if (DONUT_ALLOWED.includes(selectedBranchGroup.branch)) all.push("Donat");
-    return all.filter((name) => !monitored.includes(name));
+    const monitoredMenuIds = selectedBranchGroup.items.map((i) => String(i.menuId));
+    const monitoredNames = selectedBranchGroup.items.map((i) => (i.productName || "").toLowerCase());
+    return menus.filter(
+      (m) => !monitoredMenuIds.includes(String(m.id)) && !monitoredNames.includes((m.name || "").toLowerCase())
+    );
   }, [menus, selectedBranchGroup]);
 
   const handleAddProduct = async (e) => {
     e.preventDefault();
     if (!newStockForm.menuId) { showNotice("error", "Pilih produk terlebih dahulu."); return; }
-    const selectedMenu = menus.find((m) => m.name === newStockForm.menuId);
+    const selectedMenu = menus.find((m) => String(m.id) === String(newStockForm.menuId) || m.name === newStockForm.menuId);
+    if (!selectedMenu) { showNotice("error", "Menu tidak valid."); return; }
     const assignedRider = riders.find(
       (r) => r.outletId === selectedBranchGroup.id || r.stand === selectedBranchGroup.branch
     );
@@ -416,13 +441,13 @@ export default function MonitoringStok() {
       await api.post("/admin/stocks", {
         outlet_id: selectedBranchGroup.id || null,
         rider_id: assignedRider?.id || null,
-        menu_id: selectedMenu?.id || null,
-        product_name: newStockForm.menuId,
+        menu_id: selectedMenu.id,
+        quantity: Number(newStockForm.quantity || 0),
         stock_status: newStockForm.status,
         note: newStockForm.note,
       });
-      showNotice("success", `${newStockForm.menuId} berhasil ditambahkan.`);
-      setNewStockForm({ menuId: "", status: "Tersedia", note: "" });
+      showNotice("success", `${selectedMenu.name} berhasil ditambahkan ke monitoring.`);
+      setNewStockForm({ menuId: "", quantity: 20, status: "Tersedia", note: "" });
       await fetchAllData();
     } catch (error) {
       showNotice("error", getErrorMessage(error, "Gagal menambahkan produk."));
@@ -525,8 +550,8 @@ export default function MonitoringStok() {
       {notice.text && (
         <div
           className={`mb-5 rounded-2xl px-4 py-3 text-xs font-bold ${notice.type === "success"
-              ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30"
-              : "bg-red-500/20 text-red-200 border border-red-500/30"
+            ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30"
+            : "bg-red-500/20 text-red-200 border border-red-500/30"
             }`}
         >
           {notice.text}
@@ -558,8 +583,8 @@ export default function MonitoringStok() {
               <div
                 key={group.branch}
                 className={`saka-card rounded-3xl p-5 sm:p-6 flex flex-col gap-4 transition-all duration-200 ${hasUnavailable
-                    ? "border-red-500/20"
-                    : "border-white/10"
+                  ? "border-red-500/20"
+                  : "border-white/10"
                   }`}
               >
                 {/* Card Header */}
@@ -602,11 +627,11 @@ export default function MonitoringStok() {
                       <span
                         key={item.id}
                         className={`rounded-full px-2.5 py-1 text-[10px] font-bold flex items-center gap-1 ${item.stockStatus === "Tidak Tersedia"
-                            ? "bg-red-500/15 text-red-300 border border-red-500/20"
-                            : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/15"
+                          ? "bg-red-500/15 text-red-300 border border-red-500/20"
+                          : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/15"
                           }`}
                       >
-                        {item.stockStatus === "Tersedia" ? "✅" : "❌"} {item.productName}
+                        {item.stockStatus === "Tersedia" ? "✅" : "❌"} {item.productName} <span className="opacity-80">· Stok: {item.quantity}</span>
                       </span>
                     ))}
                   </div>
@@ -711,6 +736,22 @@ export default function MonitoringStok() {
                     <p className="text-xs text-slate-600 leading-5">{selectedBranchGroup.address}</p>
                   </div>
                 )}
+                {selectedBranchGroup.mapsLink && (
+                  <div className="rounded-2xl bg-white p-4 shadow-sm col-span-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Google Maps</p>
+                      <p className="text-xs text-slate-600 truncate max-w-[280px]">{selectedBranchGroup.mapsLink}</p>
+                    </div>
+                    <a
+                      href={selectedBranchGroup.mapsLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-xl bg-[#06251c] px-3 py-1.5 text-xs font-black text-white hover:bg-[#103c2e] transition shrink-0"
+                    >
+                      Buka Maps ↗
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* Product List */}
@@ -740,21 +781,31 @@ export default function MonitoringStok() {
                         <div
                           key={item.id}
                           className={`rounded-2xl p-4 border shadow-sm ${isAvail
-                              ? "bg-white/5 border-slate-100"
-                              : "bg-red-50 border-red-100"
+                            ? "bg-white/5 border-slate-100"
+                            : "bg-red-50 border-red-100"
                             }`}
                         >
                           <div className="flex items-center justify-between gap-3 flex-wrap">
                             <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                               <span className="text-base">{isAvail ? "✅" : "❌"}</span>
                               <h4 className="font-bold text-sm">{item.productName}</h4>
+                              <div className="flex items-center gap-1 rounded-lg bg-white/40 border border-slate-200 px-2 py-0.5 text-xs">
+                                <span className="text-slate-500 font-medium">Stok:</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  defaultValue={item.quantity}
+                                  onBlur={(e) => handleUpdateQuantity(item, e.target.value)}
+                                  className="w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-center text-xs font-black text-slate-800 outline-none focus:border-[#06251c]"
+                                />
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               <button
                                 onClick={() => handleToggleStatus(item)}
                                 className={`rounded-full px-3 py-1 text-[10px] font-black border transition ${isAvail
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
-                                    : "bg-red-50 text-red-700 border-red-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                                  : "bg-red-50 text-red-700 border-red-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
                                   }`}
                               >
                                 {item.stockStatus}
@@ -823,8 +874,8 @@ export default function MonitoringStok() {
                 {unmonitoredProducts.length === 0 ? (
                   <p className="text-xs text-slate-400 italic">Semua produk sudah dipantau.</p>
                 ) : (
-                  <form onSubmit={handleAddProduct} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
+                  <form onSubmit={handleAddProduct} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-1">
                       <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Produk</label>
                       <select
                         value={newStockForm.menuId}
@@ -833,11 +884,22 @@ export default function MonitoringStok() {
                       >
                         <option value="">Pilih Produk...</option>
                         {unmonitoredProducts.map((p) => (
-                          <option key={p} value={p}>{p}</option>
+                          <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </select>
                     </div>
-                    <div>
+                    <div className="sm:col-span-1">
+                      <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Jumlah Stok</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={newStockForm.quantity}
+                        onChange={(e) => setNewStockForm((p) => ({ ...p, quantity: e.target.value }))}
+                        placeholder="20"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-[#06251c]"
+                      />
+                    </div>
+                    <div className="sm:col-span-1">
                       <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Status</label>
                       <select
                         value={newStockForm.status}
@@ -848,7 +910,7 @@ export default function MonitoringStok() {
                         <option value="Tidak Tersedia">❌ Tidak Tersedia</option>
                       </select>
                     </div>
-                    <div className="sm:col-span-2">
+                    <div className="sm:col-span-3">
                       <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Catatan (Opsional)</label>
                       <div className="flex gap-2">
                         <input

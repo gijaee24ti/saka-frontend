@@ -6,6 +6,7 @@ import {
   buildOutletUtamaApiPayload,
   defaultOutletUtamaForm,
   findOutletUtama,
+  formatMapsLink,
   jenisOutletOptions,
   normalizeOutletUtamaFromApi,
 } from "../../utils/outletUtama";
@@ -225,11 +226,17 @@ export default function Settings() {
                   Link Google Maps
                 </label>
                 <input
-                  type="url"
+                  type="text"
                   name="mapsLink"
                   value={form.mapsLink}
                   onChange={handleChange}
-                  placeholder="https://maps.google.com/..."
+                  onBlur={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      mapsLink: formatMapsLink(e.target.value),
+                    }))
+                  }
+                  placeholder="Opsional: tempel link Google Maps atau share link di sini"
                   className={inputClass}
                 />
               </div>
